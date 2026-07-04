@@ -187,3 +187,19 @@ cp -r skills/{skill-name} ~/.claude/skills/
 Add the skill to project knowledge or paste SKILL.md contents into the conversation.
 
 If the skill requires network access, instruct users to add required domains at `claude.ai/settings/capabilities`.
+
+## Cursor Cloud specific instructions
+
+This repo is a **documentation / Claude Code plugin** — there is no `package.json`, no build step, and no application server. "Running the app" means validating the plugin content and installing it into the Claude Code CLI.
+
+### Dev/verify commands (all run from repo root)
+
+- Content checks (the closest thing to "lint/test" here — pure Node, no dependencies): `node scripts/validate-skills.js` and `node scripts/validate-commands.js`. See `.github/workflows/test-plugin-install.yml` for the authoritative CI list.
+- Hook regression tests (need `jq`, preinstalled): `bash hooks/session-start-test.sh` and `bash hooks/simplify-ignore-test.sh`. See `CONTRIBUTING.md` for when these must be run.
+- Plugin/marketplace validation + install (the "application"): `claude plugin validate .`, then `claude plugin marketplace add ./` and `claude plugin install agent-skills@addy-agent-skills --scope user`.
+
+### Non-obvious gotchas
+
+- The `claude` CLI (`@anthropic-ai/claude-code`) is the plugin host and is **not preinstalled**. The default npm global prefix is not writable (`EACCES` on `/usr/lib/node_modules`), so it is installed to the user-local prefix `~/.npm-global`. `~/.bashrc` exports `NPM_CONFIG_PREFIX="$HOME/.npm-global"` and puts `~/.npm-global/bin` on `PATH`; the startup update script reinstalls it there with an explicit `--prefix`. If `claude` is not found in a non-login shell, run `export PATH="$HOME/.npm-global/bin:$PATH"`.
+- There is no ESLint/Prettier config; the two `scripts/validate-*.js` files are the enforced quality gate for skill/command content and run in CI on every push/PR.
+- `claude plugin marketplace add ./` sets git `url."https://github.com/".insteadOf "git@github.com:"` in CI so the GitHub-sourced plugin installs over HTTPS.
