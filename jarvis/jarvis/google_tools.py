@@ -1,0 +1,145 @@
+"""Gmail (leitura + rascunho) e Google Agenda. OAuth local; nada é enviado a terceiros além do Google."""
+import base64
+import datetime as dt
+from email.message import EmailMessage
+from pathlib import Path
+
+SCOPES = [
+    "https://www.googleapis.com/auth/gmail.readonly",
+    "https://www.googleapis.com/auth/gmail.compose",  # usado só para criar rascunhos; o código nunca envia
+    "https://www.googleapis.com/auth/calendar.events",
+]
+
+
+def authorize(credentials: Path, token: Path):
+    """Fluxo OAuth (abre o navegador na 1ª vez) e devolve as credenciais."""
+    from google.auth.transport.requests import Request
+    from google.oauth2.credentials import Credentials
+    from google_auth_oauthlib.flow import InstalledAppFlow
+
+    creds = Credentials.from_authorized_user_file(str(token), SCOPES) if token.exists() else None
+    if creds and creds.expired and creds.refresh_token:
+        creds.refresh(Request())
+    elif not creds or not creds.valid:
+        creds = InstalledAppFlow.from_client_secrets_file(str(credentials), SCOPES).run_local_server(port=0)
+    token.write_text(creds.to_json(), encoding="utf-8")
+    return creds
+
+
+def _wrap(kind: str, text: str) -> str:
+    """Conteúdo de terceiros é dado, não instrução (defesa contra prompt injection)."""
+    return f"<{kind} untrusted>\n{text}\n</{kind}>"
+
+
+def _header(payload: dict, name: str) -> str:
+    for h in payload.get("headers", []):
+        if h["name"].lower() == name.lower():
+            return h["value"]
+    return ""
+
+
+def _body_text(payload: dict) -> str:
+    """Primeiro text/plain encontrado (percorre multipart)."""
+    if payload.get("mimeType") == "text/plain" and payload.get("body", {}).get("data"):
+        return base64.urlsafe_b64decode(payload["body"]["data"] + "===").decode("utf-8", "replace")
+    for part in payload.get("parts", []):
+        text = _body_text(part)
+        if text:
+            return text
+    return ""
+
+
+class Google:
+    def __init__(self, cfg: dict, root: Path, services: dict | None = None):
+        g = cfg.get("google", {})
+        self.tz = g.get("timezone", "America/Sao_Paulo")
+        self.credentials = root / g.get("credentials_file", "credentials.json")
+        self.token = root / g.get("token_file", "token.json")
+        self._services = services or {}
+
+    @property
+    def available(self) -> bool:
+        return bool(self._services) or self.credentials.exists() or self.token.exists()
+
+    def _svc(self, name: str, version: str):
+        if name not in self._services:
+            from googleapiclient.discovery import build
+
+            self._services[name] = build(name, version, credentials=authorize(self.credentials, self.token))
+        return self._services[name]
+
+    # ---------- Gmail ----------
+    def gmail_search(self, query: str = "is:unread", max_results: int = 5) -> str:
+        gm = self._svc("gmail", "v1").users().messages()
+        ids = gm.list(userId="me", q=query, maxResults=min(int(max_results), 10)).execute().get("messages", [])
+        lines = []
+        for m in ids:
+            msg = gm.get(userId="me", id=m["id"], format="metadata",
+                         metadataHeaders=["From", "Subject", "Date"]).execute()
+            p = msg["payload"]
+            lines.append(f"id={m['id']} | {_header(p, 'From')} | {_header(p, 'Subject')} | {_header(p, 'Date')}")
+        return _wrap("email_list", "\n".join(lines) or "Nenhuma mensagem.")
+
+    def gmail_read(self, message_id: str) -> str:
+        msg = self._svc("gmail", "v1").users().messages().get(userId="me", id=message_id, format="full").execute()
+        p = msg["payload"]
+        body = (_body_text(p) or msg.get("snippet", ""))[:4000]
+        return _wrap("email", f"De: {_header(p, 'From')}\nAssunto: {_header(p, 'Subject')}\n\n{body}")
+
+    def gmail_draft(self, to: str, subject: str, body: str) -> str:
+        m = EmailMessage()
+        m["To"], m["Subject"] = to, subject
+        m.set_content(body)
+        raw = base64.urlsafe_b64encode(m.as_bytes()).decode()
+        d = self._svc("gmail", "v1").users().drafts().create(userId="me", body={"message": {"raw": raw}}).execute()
+        return f"Rascunho criado (id {d['id']}). Não foi enviado; revise no Gmail."
+
+    # ---------- Agenda ----------
+    def calendar_list(self, days: int = 1) -> str:
+        now = dt.datetime.now(dt.timezone.utc)
+        ev = self._svc("calendar", "v3").events().list(
+            calendarId="primary",
+            timeMin=now.isoformat(),
+            timeMax=(now + dt.timedelta(days=min(int(days), 30))).isoformat(),
+            singleEvents=True,
+            orderBy="startTime",
+            maxResults=20,
+        ).execute().get("items", [])
+        lines = [
+            f"id={e['id']} | {e['start'].get('dateTime', e['start'].get('date'))} | {e.get('summary', '(sem título)')}"
+            for e in ev
+        ]
+        return _wrap("calendar", "\n".join(lines) or "Agenda livre no período.")
+
+    def calendar_create(self, summary: str, start: str, end: str, description: str = "") -> str:
+        """start/end em ISO 8601 sem fuso (ex.: 2026-10-22T14:00:00); o fuso vem do config."""
+        dt.datetime.fromisoformat(start), dt.datetime.fromisoformat(end)  # valida o formato
+        body = {
+            "summary": summary,
+            "description": description,
+            "start": {"dateTime": start, "timeZone": self.tz},
+            "end": {"dateTime": end, "timeZone": self.tz},
+        }
+        e = self._svc("calendar", "v3").events().insert(calendarId="primary", body=body).execute()
+        return f"Evento criado (id {e['id']}): {summary}, {start}"
+
+
+SCHEMAS = [
+    ("gmail_search", "Busca e-mails (sintaxe do Gmail, ex.: is:unread, from:x). Retorna remetente, assunto e id.",
+     {"query": "string", "max_results": "integer"}, []),
+    ("gmail_read", "Lê o corpo de um e-mail pelo id.", {"message_id": "string"}, ["message_id"]),
+    ("gmail_draft", "Cria RASCUNHO de e-mail (nunca envia).",
+     {"to": "string", "subject": "string", "body": "string"}, ["to", "subject", "body"]),
+    ("calendar_list", "Lista eventos dos próximos N dias.", {"days": "integer"}, []),
+    ("calendar_create", "Cria evento. start/end em ISO 8601 sem fuso, ex.: 2026-10-22T14:00:00.",
+     {"summary": "string", "start": "string", "end": "string", "description": "string"},
+     ["summary", "start", "end"]),
+]
+
+
+if __name__ == "__main__":  # python -m jarvis.google_tools  -> autoriza a conta Google (1ª vez)
+    from .config import ROOT, load_config
+
+    g = Google(load_config(), ROOT)
+    authorize(g.credentials, g.token)
+    print("Autorizado. token.json salvo.")

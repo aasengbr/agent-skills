@@ -30,4 +30,10 @@ safety:
   confirm_tools:
     - write_file
     - open_app
-    - set_volume
+    - gmail_draft
+    - calendar_create
+
+google:                     # E-mail e Agenda (veja README: credentials.json)
+  timezone: America/Sao_Paulo
+  credentials_file: credentials.json
+  token_file: token.json

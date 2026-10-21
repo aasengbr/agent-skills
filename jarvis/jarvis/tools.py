@@ -6,16 +6,21 @@ from pathlib import Path
 import psutil
 import requests
 
+from .config import ROOT
+from .google_tools import SCHEMAS as GOOGLE_SCHEMAS
+from .google_tools import Google
 from .memory import Memory
 
 
 class Tools:
-    def __init__(self, cfg: dict, memory: Memory):
+    def __init__(self, cfg: dict, memory: Memory, google: Google | None = None):
         self.cfg = cfg
         self.memory = memory
         self.workspace = Path(cfg["safety"]["workspace"])
         self.apps = {k.lower(): v for k, v in cfg["safety"]["apps"].items()}
         self.confirm_tools = set(cfg["safety"]["confirm_tools"])
+        google = google or Google(cfg, ROOT)
+        self.google = google if google.available else None
 
     # ---------- segurança ----------
     def _safe_path(self, rel: str) -> Path:
@@ -84,7 +89,7 @@ class Tools:
             }
 
         s = {"type": "string"}
-        return [
+        base = [
             tool("get_time", "Data e hora atuais."),
             tool("system_status", "Uso de CPU, RAM e bateria do PC."),
             tool("remember", "Guarda um fato na memória de longo prazo.", {"text": s}, ["text"]),
@@ -95,11 +100,15 @@ class Tools:
             tool("open_app", "Abre um aplicativo permitido.", {"name": s}, ["name"]),
             tool("web_fetch", "Baixa o texto de uma URL http(s).", {"url": s}, ["url"]),
         ]
+        if self.google:
+            for name, desc, props, req in GOOGLE_SCHEMAS:
+                base.append(tool(name, desc, {k: {"type": v} for k, v in props.items()}, req))
+        return base
 
     def run(self, name: str, args: dict, confirm) -> str:
-        fn = getattr(self, name, None)
-        if name not in {t["name"] for t in self.schemas()} or fn is None:
+        if name not in {t["name"] for t in self.schemas()}:
             return f"Ferramenta desconhecida: {name}"
+        fn = getattr(self, name, None) or getattr(self.google, name)
         if name in self.confirm_tools and not confirm(f"{name} {args}"):
             return "Ação negada pelo usuário."
         try:

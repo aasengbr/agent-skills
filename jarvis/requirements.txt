@@ -5,3 +5,7 @@ psutil>=5.9
 requests>=2.31
 
 # Voz (opcional: instale com `pip install -r requirements-voice.txt`)
+
+# E-mail e Agenda
+google-api-python-client>=2.100
+google-auth-oauthlib>=1.2
