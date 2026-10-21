@@ -4,11 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>JARVIS HUD</title>
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#02080d">
+<link rel="apple-touch-icon" href="/icon-192.png">
 <style>
   :root { --c:#00d9ff; --bg:#02080d; --dim:#0a2a36; --txt:#bfefff; }
   * { box-sizing:border-box; }
   body { margin:0; background:radial-gradient(circle at 50% 40%, #06202c, var(--bg) 70%); color:var(--txt);
-         font-family:"Consolas","Courier New",monospace; height:100vh; display:grid;
+         font-family:"Consolas","Courier New",monospace; height:100vh; height:100dvh; display:grid;
          grid-template-columns:220px 1fr 280px; grid-template-rows:1fr auto; gap:12px; padding:14px; }
   .panel { border:1px solid var(--dim); background:rgba(0,217,255,.04); padding:10px; overflow:hidden; }
   h2 { margin:0 0 8px; font-size:12px; letter-spacing:.2em; color:var(--c); font-weight:normal; }
@@ -22,12 +25,21 @@
   #transcript { min-height:48px; max-height:110px; overflow-y:auto; font-size:14px; }
   #transcript .you { color:#7aa; } #transcript .bot { color:var(--txt); }
   form { display:flex; gap:8px; }
-  input { flex:1; background:transparent; border:1px solid var(--c); color:var(--txt); padding:10px; font:inherit; }
-  button { background:var(--c); color:#001018; border:0; padding:0 18px; font:inherit; cursor:pointer; }
+  input { flex:1; min-width:0; background:transparent; border:1px solid var(--c); color:var(--txt); padding:10px; font:inherit; }
+  button { flex-shrink:0; background:var(--c); color:#001018; border:0; padding:0 18px; font:inherit; cursor:pointer; }
   #modal { display:none; position:fixed; inset:0; background:rgba(0,0,0,.75); align-items:center; justify-content:center; }
   #modal.on { display:flex; } #modal .box { border:1px solid #ffb300; background:#120d00; padding:24px; max-width:520px; }
   #modal p { color:#ffb300; word-break:break-word; } #modal button + button { background:#444; color:#fff; margin-left:8px; }
-  @media (max-width:800px){ body{grid-template-columns:1fr; height:auto;} #bottom{grid-column:1;} }
+  #mic.on { background:#ffb300; } #mic, #spk { padding:0 14px; }
+  #spk.off { background:#444; color:#bbb; }
+  #login { display:none; position:fixed; inset:0; background:var(--bg); align-items:center; justify-content:center; z-index:9; }
+  #login.on { display:flex; } #login form { flex-direction:column; width:min(90vw,360px); }
+  #login p { color:#ffb300; min-height:1.2em; margin:0; }
+  @media (max-width:800px){
+    body{grid-template-columns:1fr; grid-template-rows:auto; height:auto; min-height:100dvh; padding:10px;}
+    #center{order:-1;} canvas{width:min(70vw,45vh);} #bottom{grid-column:1; position:sticky; bottom:0; background:var(--bg);}
+    #log{height:120px;} input{font-size:16px;} button{min-height:44px;} #f{gap:6px;} #mic,#spk{padding:0 10px;} #f button:last-child{padding:0 12px;}
+  }
 </style>
 </head>
 <body>
@@ -40,12 +52,15 @@
 <div class="panel"><h2>FERRAMENTAS</h2><div id="log"></div></div>
 <div class="panel" id="bottom">
   <div id="transcript"></div>
-  <form id="f"><input id="q" autocomplete="off" placeholder="Digite um comando para o JARVIS..."><button>ENVIAR</button></form>
+  <form id="f"><button type="button" id="mic" title="Falar">🎤</button><button type="button" id="spk" class="off" title="Ler respostas em voz alta">🔊</button>
+    <input id="q" autocomplete="off" placeholder="Digite ou fale um comando..."><button>ENVIAR</button></form>
 </div>
+<div id="login"><form id="lf"><h2>CÓDIGO DE ACESSO</h2><input id="code" type="password" autocomplete="current-password" placeholder="Código do JARVIS"><p id="lerr"></p><button>ENTRAR</button></form></div>
 <div id="modal"><div class="box"><h2>CONFIRMAÇÃO NECESSÁRIA</h2><p id="act"></p>
   <button id="yes">AUTORIZAR</button><button id="no">NEGAR</button></div></div>
 <script>
-const TOKEN = "__TOKEN__";
+let TOKEN = "__TOKEN__"; // vazio no modo remoto: o código é digitado e fica só neste aparelho
+try { if (!TOKEN) TOKEN = localStorage.getItem("jarvis_code") || ""; } catch (e) {}
 const COLORS = {standby:"#00d9ff", listening:"#ffb300", thinking:"#ffffff", speaking:"#3dff9a"};
 let state = "standby", t = 0;
 const $ = id => document.getElementById(id);
@@ -62,19 +77,50 @@ function addTool(name, args, result) {
   $("log").prepend(d);
 }
 
-const es = new EventSource("/events?token=" + TOKEN);
-es.onopen = () => $("link").textContent = "ONLINE";
-es.onerror = () => $("link").textContent = "OFFLINE";
-es.onmessage = e => {
+let es = null, opened = false;
+function onMsg(e) {
   const m = JSON.parse(e.data);
   if (m.type === "state") setState(m.state);
   else if (m.type === "user") addLine("you", "Você", m.text);
-  else if (m.type === "assistant") addLine("bot", "JARVIS", m.text);
+  else if (m.type === "assistant") { addLine("bot", "JARVIS", m.text); speak(m.text); }
   else if (m.type === "tool") addTool(m.name, m.args, m.result);
   else if (m.type === "stats") { $("cpu").style.width = m.cpu + "%"; $("ram").style.width = m.ram + "%";
     $("cpuv").textContent = Math.round(m.cpu); $("ramv").textContent = Math.round(m.ram); }
   else if (m.type === "confirm") { $("act").textContent = m.action; $("modal").classList.add("on"); }
-};
+}
+function connect() {
+  if (!TOKEN) { $("login").classList.add("on"); return; }
+  opened = false;
+  es = new EventSource("/events?token=" + encodeURIComponent(TOKEN));
+  es.onopen = () => { opened = true; $("link").textContent = "ONLINE"; $("login").classList.remove("on"); };
+  es.onmessage = onMsg;
+  es.onerror = () => {
+    $("link").textContent = "OFFLINE";
+    if (!opened) { es.close(); try { localStorage.removeItem("jarvis_code"); } catch (e) {}  // código recusado
+      TOKEN = ""; $("lerr").textContent = "Código inválido ou bloqueado."; $("login").classList.add("on"); }
+  };
+}
+$("lf").onsubmit = ev => { ev.preventDefault(); TOKEN = $("code").value;
+  try { localStorage.setItem("jarvis_code", TOKEN); } catch (e) {} $("lerr").textContent = ""; connect(); };
+
+// Voz no navegador (Android/Chrome). O reconhecimento usa o serviço de voz do Google.
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+let speakOn = false;
+function speak(t) {
+  if (!speakOn || !window.speechSynthesis) return;
+  const u = new SpeechSynthesisUtterance(t); u.lang = "pt-BR"; speechSynthesis.cancel(); speechSynthesis.speak(u);
+}
+$("spk").onclick = () => { speakOn = !speakOn; $("spk").classList.toggle("off", !speakOn);
+  if (speakOn && window.speechSynthesis) speechSynthesis.speak(new SpeechSynthesisUtterance(" ")); };  // libera o áudio
+if (!SR) { $("mic").style.display = "none"; } else {
+  const rec = new SR(); rec.lang = "pt-BR"; rec.interimResults = false; rec.maxAlternatives = 1;
+  rec.onstart = () => { $("mic").classList.add("on"); setState("listening"); };
+  rec.onend = () => { $("mic").classList.remove("on"); if (state === "listening") setState("standby"); };
+  rec.onresult = e => post("/ask", {text: e.results[0][0].transcript});
+  $("mic").onclick = () => { try { rec.start(); } catch (e) {} };
+}
+if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});
+connect();
 $("f").onsubmit = ev => { ev.preventDefault(); const v = $("q").value.trim(); if (!v) return; $("q").value = ""; post("/ask", {text:v}); };
 const answer = ok => { $("modal").classList.remove("on"); post("/confirm", {ok}); };
 $("yes").onclick = () => answer(true); $("no").onclick = () => answer(false);

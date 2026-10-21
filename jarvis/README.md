@@ -51,6 +51,17 @@ Ferramentas: `ha_list`, `ha_state`, `ha_call`. Aparecem só com `HA_TOKEN` no `.
 
 Faixas de risco (`config.yaml`): `auto_domains` (luz, interruptor, ventilador, mídia, cena) executam direto; `confirm_domains` (clima, persiana, aspirador) pedem confirmação; **qualquer outro domínio (fechaduras, alarme, scripts, automações, câmeras) é bloqueado e nem aparece para o modelo.** Em `ha_call` o `entity_id` precisa pertencer ao domínio informado, o serviço é validado por regex, e `entity_id`/`area_id`/`device_id` dentro de `data` são descartados.
 
+## Android / celular (PWA)
+O JARVIS continua rodando no PC; o celular é o controle remoto (HUD instalável, microfone e voz do Chrome). Sem app nativo, sem abrir portas na internet.
+
+1. Instale o [Tailscale](https://tailscale.com/) no PC e no celular (mesma conta) e ative **HTTPS/MagicDNS** no painel admin. O HTTPS é obrigatório: o Chrome só libera o microfone em conexão segura.
+2. No `.env` do PC: `JARVIS_HUD_CODE=<frase longa, 12+ caracteres>`.
+3. No PC: `python -m jarvis.main --text --allow-host meu-pc.seu-tailnet.ts.net` e, em outro terminal, `tailscale serve --bg 8765`.
+4. No celular (Chrome): abra `https://meu-pc.seu-tailnet.ts.net`, digite o código, e use menu ⋮ → **Adicionar à tela inicial**.
+5. 🎤 fala o comando (push-to-talk; não há wake word no navegador), 🔊 lê as respostas em voz alta. As confirmações aparecem como janela no celular.
+
+Segurança do modo remoto: o servidor continua em `127.0.0.1` (o Tailscale faz a ponte, nada fica exposto na rede local); só os hosts de `--allow-host` são aceitos; o código **não vai embutido na página** (fica só no aparelho); 10 tentativas erradas em 5 min bloqueiam por 5 min; o programa se recusa a subir em modo remoto com código curto. Privacidade: o reconhecimento de voz do Chrome Android envia o áudio ao Google; se não quiser, digite os comandos. Quem tiver o código controla as ferramentas do PC (inclusive ler e-mail e Drive), então trate-o como senha.
+
 ## Segurança (decisões de projeto)
 - E-mails, agenda e páginas web chegam ao modelo dentro de tags `untrusted` e o prompt do sistema os trata como dado, nunca como instrução (defesa contra prompt injection). É mitigação, não garantia: por isso toda escrita (`gmail_draft`, `calendar_create`, `write_file`, `open_app`) exige sua confirmação.
 - Arquivos: só dentro de `safety.workspace` (bloqueia `../`).
@@ -69,6 +80,7 @@ Faixas de risco (`config.yaml`): `auto_domains` (luz, interruptor, ventilador, m
 | Visão de tela | Implementada e testada com captura simulada (confirmação, redução, aviso de dado não confiável). **Captura real (`mss`) não testada** em Windows |
 | Casa inteligente | Implementada e testada com Home Assistant simulado (faixas de risco, bloqueios, confirmação). **Não testada contra um Home Assistant real** |
 | Controle de mouse/teclado | **Não implementado** (decisão deliberada: maior risco) |
+| Android (PWA via Tailscale) | Implementado; servidor, login, bloqueio e layout testados no Chromium (emulação de celular). **Não testado em Android real, nem com Tailscale real, nem o microfone do Chrome** |
 | Interface HUD estilo Iron Man | Implementado e testado (`pytest`, renderização no Chromium sem erros de JS). Não verificado em Windows/Edge |
 
 ## Referências de design

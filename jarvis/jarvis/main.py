@@ -1,5 +1,7 @@
 """Ponto de entrada: `python -m jarvis.main [--text] [--hud]`."""
 import argparse
+import os
+import sys
 import threading
 import webbrowser
 
@@ -9,15 +11,19 @@ from .hud import Hud
 from .memory import Memory
 from .tools import Tools
 
-
 def main() -> None:
     ap = argparse.ArgumentParser(description="JARVIS")
     ap.add_argument("--text", action="store_true", help="modo texto (sem microfone)")
     ap.add_argument("--hud", action="store_true", help="abre a interface visual no navegador")
     ap.add_argument("--port", type=int, default=8765, help="porta do HUD (127.0.0.1)")
+    ap.add_argument("--allow-host", action="append", default=[], metavar="HOST",
+                    help="acesso remoto (celular) via proxy HTTPS, ex.: meu-pc.tailnet.ts.net. Exige JARVIS_HUD_CODE")
     args = ap.parse_args()
 
-    cfg = load_config()
+    cfg = load_config()  # carrega também o .env
+    code = os.getenv("JARVIS_HUD_CODE", "")
+    if args.allow_host and len(code) < 12:
+        sys.exit("Acesso remoto exige JARVIS_HUD_CODE com pelo menos 12 caracteres (defina no .env).")
     name, title = cfg["assistant"]["name"], cfg["assistant"]["user_title"]
     memory = Memory(ROOT / "jarvis.db")
     tools = Tools(cfg, memory)
@@ -57,11 +63,13 @@ def main() -> None:
 
     brain = Brain(cfg, tools, memory, confirm, emit)
 
-    if args.hud:
-        hud = Hud(args.port, handle)
+    if args.hud or args.allow_host:
+        remote = bool(args.allow_host)
+        hud = Hud(args.port, handle, allowed_hosts=args.allow_host, access_code=code if remote else "")
         url = hud.start()
-        print(f"HUD: {url}")
-        webbrowser.open(url)
+        print(f"HUD: {url}" + (f"  (remoto: {', '.join(args.allow_host)})" if remote else ""))
+        if not remote:
+            webbrowser.open(url)
 
     say(f"{name} online, {title}.")
 
@@ -85,7 +93,6 @@ def main() -> None:
     if hud:
         hud.stop()
     print("Encerrando.")
-
 
 if __name__ == "__main__":
     main()

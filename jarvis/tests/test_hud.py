@@ -72,3 +72,35 @@ def test_confirm_roundtrip_and_sse():
         assert res["ok"] is True
     finally:
         hud.stop()
+
+
+CODE = "codigo-forte-123456"
+
+
+def test_remote_mode_code_not_in_page_hosts_and_lockout():
+    hud = Hud(0, lambda t: None, allowed_hosts=["pc.tail.ts.net"], access_code=CODE)
+    hud.start()
+    try:
+        code, body = req(hud, "/")
+        assert code == 200 and CODE.encode() not in body and b"__TOKEN__" not in body   # nunca embutido
+        for path, ctype in (("/manifest.webmanifest", b"JARVIS"), ("/sw.js", b"fetch"), ("/icon-192.png", b"PNG")):
+            c, b = req(hud, path)
+            assert c == 200 and ctype in b
+        assert req(hud, "/ask", {"text": "oi"}, token=CODE, host="pc.tail.ts.net")[0] == 202   # host liberado
+        assert req(hud, "/ask", {"text": "oi"}, token=CODE, host="outro.com")[0] == 403         # host não liberado
+        assert req(hud, "/ask", {"text": "oi"}, token="errado", host="pc.tail.ts.net")[0] == 403
+        for _ in range(12):                                                                    # força bruta
+            req(hud, "/ask", {"text": "x"}, token="chute", host="pc.tail.ts.net")
+        assert req(hud, "/ask", {"text": "oi"}, token=CODE, host="pc.tail.ts.net")[0] == 403   # bloqueado
+    finally:
+        hud.stop()
+
+
+def test_local_mode_unchanged_and_static_needs_valid_host():
+    hud = Hud(0, lambda t: None)
+    hud.start()
+    try:
+        assert hud.token.encode() in req(hud, "/")[1]
+        assert req(hud, "/sw.js", host="evil.com")[0] == 403
+    finally:
+        hud.stop()
