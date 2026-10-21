@@ -89,7 +89,7 @@ def http(method, url, body=None, token=True, headers=None):
 
 
 class Run:
-    def __init__(self, tmp, llm_port, port, data):
+    def __init__(self, tmp, llm_port, port, data, extra_env=None, patch=None):
         self.port, self.base, self.events, self.ok, self.bad = port, f"http://127.0.0.1:{port}", [], 0, []
         cfg = (ROOT / "config.yaml").read_text(encoding="utf-8")
         import yaml
@@ -98,9 +98,12 @@ class Run:
                                            "key_env": ""}},
                     "models": {"m": {"provider": "mock", "id": "mock-1", "tools": True}},
                     "routes": {t: ["m"] for t in ("chat", "deep", "memory", "quick")}}
+        if patch:
+            patch(c)
         (Path(tmp) / "e2e.yaml").write_text(yaml.safe_dump(c, allow_unicode=True), encoding="utf-8")
         self.env = {**os.environ, "AASIS_CONFIG": str(Path(tmp) / "e2e.yaml"), "AASIS_DATA_DIR": str(data), "PORT": str(port),
-                    "AASIS_HUD_CODE": CODE, "AASIS_ALLOWED_HOSTS": "aasis.exemplo.com", "ANTHROPIC_API_KEY": "x"}
+                    "AASIS_HUD_CODE": CODE, "AASIS_ALLOWED_HOSTS": "aasis.exemplo.com", "ANTHROPIC_API_KEY": "x",
+                    **(extra_env or {})}
         self.log = open(Path(tmp) / f"server{port}.log", "w")
         self.proc = subprocess.Popen([sys.executable, "-m", "aasis.main", "--serve"], cwd=ROOT, env=self.env,
                                      stdout=self.log, stderr=subprocess.STDOUT)
