@@ -89,7 +89,7 @@ def http(method, url, body=None, token=True, headers=None):
 
 
 class Run:
-    def __init__(self, tmp, llm_port, port, data):
+    def __init__(self, tmp, llm_port, port, data, extra_env=None, patch=None):
         self.port, self.base, self.events, self.ok, self.bad = port, f"http://127.0.0.1:{port}", [], 0, []
         cfg = (ROOT / "config.yaml").read_text(encoding="utf-8")
         import yaml
@@ -98,9 +98,12 @@ class Run:
                                            "key_env": ""}},
                     "models": {"m": {"provider": "mock", "id": "mock-1", "tools": True}},
                     "routes": {t: ["m"] for t in ("chat", "deep", "memory", "quick")}}
+        if patch:
+            patch(c)
         (Path(tmp) / "e2e.yaml").write_text(yaml.safe_dump(c, allow_unicode=True), encoding="utf-8")
         self.env = {**os.environ, "AASIS_CONFIG": str(Path(tmp) / "e2e.yaml"), "AASIS_DATA_DIR": str(data), "PORT": str(port),
-                    "AASIS_HUD_CODE": CODE, "AASIS_ALLOWED_HOSTS": "aasis.exemplo.com", "ANTHROPIC_API_KEY": "x"}
+                    "AASIS_HUD_CODE": CODE, "AASIS_ALLOWED_HOSTS": "aasis.exemplo.com", "ANTHROPIC_API_KEY": "x",
+                    **(extra_env or {})}
         self.log = open(Path(tmp) / f"server{port}.log", "w")
         self.proc = subprocess.Popen([sys.executable, "-m", "aasis.main", "--serve"], cwd=ROOT, env=self.env,
                                      stdout=self.log, stderr=subprocess.STDOUT)
@@ -219,6 +222,9 @@ def main():
                 r.check("após OK, não reenvia", len([e for e in r.events if e["type"] == "reminder"]) == n0)
 
             print("7) Backup diário e persistência após reiniciar")
+            logtxt = (Path(tmp) / f"server{r.port}.log").read_text()
+            r.check("log do servidor não guarda conversa nem memória",
+                    all(x not in logtxt for x in ("gato chamado Tom", "Losartana", "que horas são", "Teste e2e")), "conteúdo no stdout")
             r.check("backup criado em /data/backups", any((data / "backups").glob("aasis-*.db")))
             r.stop()
             r2 = Run(tmp, srv.server_address[1], free_port(), data)

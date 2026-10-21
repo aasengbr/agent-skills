@@ -204,7 +204,7 @@ medição de entrega dos avisos são obrigatórios.
 | Migração dos fatos antigos | Feito (uma vez) |
 
 **Ficou de fora** (e continua só no projeto): consolidação noturna, criptografia de campo, backup no Drive, embeddings,
-`schedule`/`monitor` (remédios, contas), canal Telegram, streaming.
+`monitor` de contas, streaming. **Fase 2 (remédios + Telegram + heartbeat) foi implementada depois:** veja [`telegram-meds.md`](telegram-meds.md).
 
 **Limites conhecidos**
 - A busca é por palavra (prefixo, variação de verbo, famílias de palavras e uma lista pequena de sinônimos). Lacunas de

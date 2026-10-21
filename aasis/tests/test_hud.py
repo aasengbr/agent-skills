@@ -104,3 +104,31 @@ def test_local_mode_unchanged_and_static_needs_valid_host():
         assert req(hud, "/sw.js", host="evil.com")[0] == 403
     finally:
         hud.stop()
+
+
+def test_client_sending_body_after_a_rejection_gets_clean_close():
+    """Contrato: depois de um 403 o servidor consome o corpo que ainda chegar e fecha limpo (ver `_drain` em hud.py).
+    LIMITE: este teste passa também sem o `_drain` no Linux (o RST não é visível ao cliente aqui); o defeito original só
+    apareceu no Windows (WinError 10053 no CI) e só o CI do Windows pode confirmar a correção."""
+    import socket
+    hud = Hud(0, lambda t: None, allowed_hosts=["pc.tail.ts.net"], access_code="codigo-de-acesso-longo-123")
+    hud.start()
+    try:
+        body = b'{"text": "' + b"x" * 5000 + b'"}'
+        head = (b"POST /ask HTTP/1.1\r\nHost: pc.tail.ts.net\r\nX-Token: chute\r\nContent-Length: %d\r\n\r\n" % len(body))
+        s = socket.create_connection(("127.0.0.1", hud.port), timeout=5)
+        s.sendall(head + body[:100])                       # cabeçalho + começo do corpo
+        resp = s.recv(4096)
+        assert resp.startswith(b"HTTP/1.0 403") or resp.startswith(b"HTTP/1.1 403")   # responde sem esperar o corpo
+        time.sleep(0.3)                                    # o servidor já terminou de responder...
+        s.sendall(body[100:])                              # ...e o cliente manda o resto: não pode dar erro de conexão
+        s.settimeout(5)
+        rest = b""
+        while True:
+            chunk = s.recv(4096)                           # fim limpo (b""), nunca ConnectionResetError/Aborted
+            if not chunk:
+                break
+            rest += chunk
+        s.close()
+    finally:
+        hud.stop()
