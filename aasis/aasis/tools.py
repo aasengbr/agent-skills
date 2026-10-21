@@ -23,7 +23,7 @@ class Tools:
                  home: Home | None = None, http=None):
         self.cfg = cfg
         self.memory = memory
-        self.workspace = Path(cfg["safety"]["workspace"])
+        self.workspace = Path(cfg["safety"]["workspace"]).resolve()  # resolve: Windows usa nomes curtos (8.3) em temp
         self.apps = {k.lower(): v for k, v in cfg["safety"]["apps"].items()}
         self.confirm_tools = set(cfg["safety"]["confirm_tools"])
         self.tz = ZoneInfo(cfg.get("assistant", {}).get("timezone", "America/Sao_Paulo"))
