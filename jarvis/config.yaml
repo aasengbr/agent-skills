@@ -2,6 +2,7 @@ assistant:
   name: JARVIS
   user_title: senhor        # como o assistente te chama
   language: pt-BR
+  timezone: America/Sao_Paulo   # datas, lembretes e virada do teto diário (o servidor na nuvem roda em UTC)
   model: claude-sonnet-5-5  # cérebro (nuvem)
   max_tokens: 1024
   max_tool_rounds: 6

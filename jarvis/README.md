@@ -78,6 +78,14 @@ O JARVIS roda num servidor online e você o usa pelo Chrome do celular. Passo a 
 
 Na nuvem, as ferramentas do PC (abrir apps, visão de tela, status do PC) ficam desligadas e as confirmações só vêm pelo HUD (sem HUD aberto, ações sensíveis são negadas). O endereço é **público na internet**: a única barreira é o código, por isso o servidor exige 20+ caracteres, aceita só os hosts configurados e bloqueia por IP depois de 10 erros em 5 min. Não reutilize esse código em outro lugar.
 
+## Rotina: resumo do dia, tarefas e lembretes
+- **Resumo do dia** (`daily_brief`, botão ☀ no HUD): agenda das próximas 24h, e-mails não lidos dos últimos 2 dias, tarefas e lembretes pendentes. Se o Google não estiver conectado ou uma seção falhar, o resto do resumo sai normalmente.
+- **Tarefas** (`task_add/list/done/remove`): "anote pagar o boleto até 30/10". Prazo opcional.
+- **Lembretes** (`reminder_add/list/cancel`): "me lembre em 20 minutos de tirar o bolo" ou "amanhã às 9h ligar para o banco". Um lembrete vencido aparece no HUD com botão **OK** e é **reenviado a cada 60 s até você confirmar**, então não se perde se o celular estava bloqueado. Na nuvem, só é entregue com o HUD aberto; ficam pendentes até você abrir.
+- 🔔 **Avisos** ativa notificações do navegador, mas elas só chegam enquanto o app/aba está vivo. **Não há notificação push com o app fechado** (exigiria Web Push; não implementado). Lembretes recorrentes e resumo automático agendado também não existem.
+- **Fuso:** `assistant.timezone` (padrão `America/Sao_Paulo`) vale para datas, lembretes e a virada do teto diário. O JARVIS recebe a data e hora atuais a cada pergunta, então "amanhã" e "sexta" funcionam.
+- Tarefas e lembretes ficam no banco local (na nuvem, só persistem com disco em `/data`). Como conteúdo de e-mail poderia induzir o modelo a criar uma tarefa, o texto das tarefas e lembretes também chega ao modelo marcado como dado não confiável.
+
 ## Controle de custo e registro de ações
 - **Teto diário** (`budget.daily_tokens`, padrão 500000 tokens de entrada+saída; 0 = sem limite). Ao atingir, o JARVIS para de chamar a API até o dia seguinte. O valor é uma estimativa: confira seu consumo real no console da Anthropic e ajuste. O HUD mostra "TOKENS HOJE". O teto limita tokens, não reais.
 - **Histórico limitado** (`assistant.max_history_turns`, padrão 12 turnos): cada chamada reenvia só a conversa recente, sem separar uma ferramenta do seu resultado. Memória de longo prazo (`remember`) não é afetada.

@@ -30,6 +30,10 @@
   #modal { display:none; position:fixed; inset:0; background:rgba(0,0,0,.75); align-items:center; justify-content:center; }
   #modal.on { display:flex; } #modal .box { border:1px solid #ffb300; background:#120d00; padding:24px; max-width:520px; }
   #modal p { color:#ffb300; word-break:break-word; } #modal button + button { background:#444; color:#fff; margin-left:8px; }
+  #chips { display:flex; gap:6px; flex-wrap:wrap; } #chips button { background:transparent; color:var(--c); border:1px solid var(--dim); min-height:30px; padding:0 10px; }
+  #alerts { position:fixed; top:10px; left:10px; right:10px; z-index:8; display:flex; flex-direction:column; gap:8px; pointer-events:none; }
+  .alert { pointer-events:auto; border:1px solid #ffb300; background:#120d00; color:#ffb300; padding:12px; display:flex; gap:10px; align-items:center; justify-content:space-between; }
+  .alert button { background:#ffb300; min-height:36px; }
   #mic.on { background:#ffb300; } #mic, #spk { padding:0 14px; }
   #spk.off { background:#444; color:#bbb; }
   #login { display:none; position:fixed; inset:0; background:var(--bg); align-items:center; justify-content:center; z-index:9; }
@@ -54,9 +58,11 @@
 <div class="panel"><h2>FERRAMENTAS</h2><div id="log"></div></div>
 <div class="panel" id="bottom">
   <div id="transcript"></div>
+  <div id="chips"><button type="button" data-q="Faça meu resumo do dia.">☀ Resumo do dia</button><button type="button" data-q="Quais são minhas tarefas pendentes?">☑ Tarefas</button><button type="button" data-q="Quais lembretes tenho pendentes?">⏰ Lembretes</button><button type="button" id="bell">🔔 Avisos</button></div>
   <form id="f"><button type="button" id="mic" title="Falar">🎤</button><button type="button" id="spk" class="off" title="Ler respostas em voz alta">🔊</button>
     <input id="q" autocomplete="off" placeholder="Digite ou fale um comando..."><button>ENVIAR</button></form>
 </div>
+<div id="alerts"></div>
 <div id="login"><form id="lf"><h2>CÓDIGO DE ACESSO</h2><input id="code" type="password" autocomplete="current-password" placeholder="Código do JARVIS"><p id="lerr"></p><button>ENTRAR</button></form></div>
 <div id="modal"><div class="box"><h2>CONFIRMAÇÃO NECESSÁRIA</h2><p id="act"></p>
   <button id="yes">AUTORIZAR</button><button id="no">NEGAR</button></div></div>
@@ -103,6 +109,7 @@ function onMsg(e) {
   else if (m.type === "usage") { $("ubox").style.display = "block";
     $("uv").textContent = m.limit ? m.used + " / " + m.limit : m.used + " (sem limite)";
     $("ub").style.width = m.limit ? Math.min(100, m.used / m.limit * 100) + "%" : "0"; }
+  else if (m.type === "reminder") showReminder(m);
   else if (m.type === "confirm") { $("act").textContent = m.action; $("modal").classList.add("on"); }
 }
 function connect() {
@@ -120,6 +127,23 @@ function connect() {
 $("gbtn").onclick = () => { location.href = "/google/start?token=" + encodeURIComponent(TOKEN); };
 $("lf").onsubmit = ev => { ev.preventDefault(); TOKEN = $("code").value;
   try { localStorage.setItem("jarvis_code", TOKEN); } catch (e) {} $("lerr").textContent = ""; connect(); };
+
+// Lembretes: ficam na tela até você tocar em OK (o servidor reenvia a cada 60 s; deduplicado por id)
+function showReminder(m) {
+  const id = "r" + m.id; let el = document.getElementById(id);
+  if (!el) {
+    el = document.createElement("div"); el.className = "alert"; el.id = id;
+    const t = document.createElement("span"); t.textContent = "⏰ " + m.text;
+    const b = document.createElement("button"); b.textContent = "OK";
+    b.onclick = () => { post("/ack", {id: m.id}); el.remove(); };
+    el.append(t, b); $("alerts").appendChild(el);
+    speak("Lembrete: " + m.text); try { navigator.vibrate && navigator.vibrate([200, 100, 200]); } catch (e) {}
+  }
+  if (window.Notification && Notification.permission === "granted" && navigator.serviceWorker)
+    navigator.serviceWorker.ready.then(r => r.showNotification("JARVIS", {body: m.text, tag: id})).catch(() => {});
+}
+$("bell").onclick = () => { if (window.Notification) Notification.requestPermission().then(p => { $("bell").textContent = p === "granted" ? "🔔 Ativados" : "🔕 Bloqueados"; }); };
+document.querySelectorAll("#chips button[data-q]").forEach(b => b.onclick = () => post("/ask", {text: b.dataset.q}));
 
 // Voz no navegador (Android/Chrome). O reconhecimento usa o serviço de voz do Google.
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;

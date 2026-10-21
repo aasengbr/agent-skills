@@ -4,12 +4,14 @@ import os
 import sys
 import threading
 import webbrowser
+from zoneinfo import ZoneInfo
 
 from .brain import Brain
 from .config import data_dir, load_config
 from .google_tools import WebAuth
 from .hud import Hud
 from .memory import Memory
+from .scheduler import Scheduler
 from .tools import Tools
 
 def main() -> None:
@@ -40,7 +42,7 @@ def main() -> None:
     elif args.allow_host and len(code) < 12:
         sys.exit("Acesso remoto exige JARVIS_HUD_CODE com pelo menos 12 caracteres (defina no .env).")
     name, title = cfg["assistant"]["name"], cfg["assistant"]["user_title"]
-    memory = Memory(data_dir() / "jarvis.db")
+    memory = Memory(data_dir() / "jarvis.db", tz=ZoneInfo(cfg["assistant"].get("timezone", "America/Sao_Paulo")))
     tools = Tools(cfg, memory)
     voice = None
     hud: Hud | None = None
@@ -92,14 +94,28 @@ def main() -> None:
                          data_dir() / gcfg.get("token_file", "token.json"))
             hud = Hud(int(os.getenv("PORT", args.port)), handle, allowed_hosts=args.allow_host, access_code=code,
                       bind="0.0.0.0", trust_proxy=True, google_auth=ga,
-                      audit_fn=memory.recent_actions, usage_fn=brain.usage)
+                      audit_fn=memory.recent_actions, usage_fn=brain.usage, ack_fn=memory.ack_reminder)
         else:
             hud = Hud(args.port, handle, allowed_hosts=args.allow_host, access_code=code if remote else "",
-                      audit_fn=memory.recent_actions, usage_fn=brain.usage)
+                      audit_fn=memory.recent_actions, usage_fn=brain.usage, ack_fn=memory.ack_reminder)
         url = hud.start()
         print(f"HUD: {url}" + (f"  (remoto: {', '.join(args.allow_host)})" if remote else ""))
         if not remote:
             webbrowser.open(url)
+
+    def deliver(r: dict, first: bool) -> None:
+        if hud and hud.has_clients():
+            hud.publish("reminder", id=r["id"], text=r["text"])  # fica pendente até o OK do usuário (/ack)
+            if voice and first:
+                voice.speak(f"Lembrete, {title}: {r['text']}")
+        elif not args.serve:  # console/voz sem HUD aberto: avisa e confirma na hora (na nuvem fica pendente)
+            print(f"{name}: Lembrete: {r['text']}")
+            if voice:
+                voice.speak(f"Lembrete, {title}: {r['text']}")
+            memory.ack_reminder(r["id"])
+
+    # na nuvem só entrega com um HUD aberto (senão o lembrete se perderia); fora dela, sempre
+    Scheduler(memory, deliver, ready=(lambda: hud.has_clients()) if args.serve else (lambda: True)).start()
 
     say(f"{name} online, {title}.")
 

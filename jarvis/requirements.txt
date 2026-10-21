@@ -13,3 +13,4 @@ google-auth-oauthlib>=1.2
 # Visão de tela
 mss>=9.0
 pillow>=10.0
+tzdata>=2024.1

@@ -2,13 +2,14 @@
 import datetime as dt
 import subprocess
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import psutil
 import requests
 
 from .config import data_dir
 from .google_tools import SCHEMAS as GOOGLE_SCHEMAS
-from .google_tools import Google
+from .google_tools import Google, _wrap
 from .home import SCHEMAS as HOME_SCHEMAS
 from .home import Home
 from .memory import Memory
@@ -23,6 +24,7 @@ class Tools:
         self.workspace = Path(cfg["safety"]["workspace"])
         self.apps = {k.lower(): v for k, v in cfg["safety"]["apps"].items()}
         self.confirm_tools = set(cfg["safety"]["confirm_tools"])
+        self.tz = ZoneInfo(cfg.get("assistant", {}).get("timezone", "America/Sao_Paulo"))
         self.cloud = bool(cfg.get("runtime", {}).get("cloud"))  # na nuvem: sem ferramentas do PC
         self.google = google or Google(cfg, data_dir())  # disponibilidade checada a cada uso (login pelo HUD)
         self.screen = screen or Screen(cfg)
@@ -37,8 +39,82 @@ class Tools:
         return p
 
     # ---------- implementações ----------
+    WEEKDAYS = ["segunda", "terça", "quarta", "quinta", "sexta", "sábado", "domingo"]
+
+    def now(self) -> dt.datetime:
+        return dt.datetime.now(self.tz)
+
+    def now_str(self) -> str:
+        n = self.now()
+        return f"{self.WEEKDAYS[n.weekday()]}-feira, {n:%d/%m/%Y %H:%M}" if n.weekday() < 5 else \
+            f"{self.WEEKDAYS[n.weekday()]}, {n:%d/%m/%Y %H:%M}"
+
     def get_time(self) -> str:
-        return dt.datetime.now().strftime("%A, %d/%m/%Y %H:%M")
+        return f"{self.now_str()} ({self.tz.key})"
+
+    # ---------- tarefas ----------
+    def task_add(self, text: str, due: str = "") -> str:
+        if due:
+            dt.date.fromisoformat(due)  # valida AAAA-MM-DD
+        return f"Tarefa {self.memory.add_task(text, due)} criada."
+
+    def task_list(self, show_done: bool = False) -> str:
+        rows = self.memory.list_tasks(bool(show_done))
+        lines = [f"{t['id']} | {'[x] ' if t['done'] else ''}{t['text']}" + (f" | prazo {t['due']}" if t["due"] else "")
+                 for t in rows]
+        return _wrap("tasks", "\n".join(lines) or "Nenhuma tarefa pendente.")
+
+    def task_done(self, id: int) -> str:
+        return "Tarefa concluída." if self.memory.set_task_done(int(id)) else "Tarefa não encontrada."
+
+    def task_remove(self, id: int) -> str:
+        return "Tarefa removida." if self.memory.remove_task(int(id)) else "Tarefa não encontrada."
+
+    # ---------- lembretes ----------
+    UTC_FMT = "%Y-%m-%dT%H:%M:%SZ"
+
+    def reminder_add(self, text: str, when: str = "", in_minutes: int = 0) -> str:
+        """when: ISO 8601 no fuso do usuário (ex.: 2026-10-22T09:00:00); ou in_minutes."""
+        now = self.now()
+        if in_minutes:
+            due = now + dt.timedelta(minutes=int(in_minutes))
+        elif when:
+            due = dt.datetime.fromisoformat(when)
+            due = due.replace(tzinfo=self.tz) if due.tzinfo is None else due
+        else:
+            raise ValueError("Informe 'when' (ISO 8601) ou 'in_minutes'.")
+        if due <= now:
+            raise ValueError("Esse horário já passou.")
+        if len(self.memory.pending_reminders()) >= 100:
+            raise ValueError("Limite de 100 lembretes pendentes.")
+        rid = self.memory.add_reminder(text, due.astimezone(dt.timezone.utc).strftime(self.UTC_FMT))
+        return f"Lembrete {rid} agendado para {due.astimezone(self.tz):%d/%m %H:%M}: {text}"
+
+    def reminder_list(self) -> str:
+        lines = [f"{r['id']} | {dt.datetime.strptime(r['due_utc'], self.UTC_FMT).replace(tzinfo=dt.timezone.utc).astimezone(self.tz):%d/%m %H:%M} | {r['text']}"
+                 for r in self.memory.pending_reminders()]
+        return _wrap("reminders", "\n".join(lines) or "Nenhum lembrete pendente.")
+
+    def reminder_cancel(self, id: int) -> str:
+        return "Lembrete cancelado." if self.memory.cancel_reminder(int(id)) else "Lembrete não encontrado."
+
+    # ---------- resumo do dia ----------
+    def daily_brief(self) -> str:
+        parts = [f"Agora: {self.now_str()}"]
+        if self.google.available:
+            for label, call in (
+                ("Agenda (próximas 24h)", lambda: self.google.calendar_list(1)),
+                ("E-mails não lidos recentes", lambda: self.google.gmail_search("is:unread newer_than:2d", 5)),
+            ):
+                try:
+                    parts.append(f"## {label}\n{call()}")
+                except Exception as e:  # uma seção com falha não derruba o resumo
+                    parts.append(f"## {label}\n(indisponível: {type(e).__name__})")
+        else:
+            parts.append("## Google\n(não conectado: agenda e e-mail fora do resumo)")
+        parts.append("## Tarefas pendentes\n" + self.task_list())
+        parts.append("## Lembretes pendentes\n" + self.reminder_list())
+        return "\n\n".join(parts)
 
     def system_status(self) -> str:
         bat = psutil.sensors_battery() if hasattr(psutil, "sensors_battery") else None
@@ -99,6 +175,7 @@ class Tools:
             }
 
         s = {"type": "string"}
+        i = {"type": "integer"}
         base = [
             tool("get_time", "Data e hora atuais."),
             tool("system_status", "Uso de CPU, RAM e bateria do PC."),
@@ -108,6 +185,15 @@ class Tools:
             tool("write_file", "Grava arquivo no workspace.", {"path": s, "content": s}, ["path", "content"]),
             tool("list_files", "Lista arquivos do workspace.", {"path": s}),
             tool("open_app", "Abre um aplicativo permitido.", {"name": s}, ["name"]),
+            tool("daily_brief", "Resumo do dia: agenda, e-mails não lidos, tarefas e lembretes."),
+            tool("task_add", "Cria tarefa. due opcional AAAA-MM-DD.", {"text": s, "due": s}, ["text"]),
+            tool("task_list", "Lista tarefas pendentes.", {"show_done": {"type": "boolean"}}),
+            tool("task_done", "Conclui tarefa pelo id.", {"id": i}, ["id"]),
+            tool("task_remove", "Remove tarefa pelo id.", {"id": i}, ["id"]),
+            tool("reminder_add", "Agenda lembrete. Use in_minutes ou when (ISO 8601 no fuso do usuário, "
+                 "ex.: 2026-10-22T09:00:00).", {"text": s, "when": s, "in_minutes": i}, ["text"]),
+            tool("reminder_list", "Lista lembretes pendentes."),
+            tool("reminder_cancel", "Cancela lembrete pelo id.", {"id": i}, ["id"]),
             tool("web_fetch", "Baixa o texto de uma URL http(s).", {"url": s}, ["url"]),
         ]
         if self.cloud:

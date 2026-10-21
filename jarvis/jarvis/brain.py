@@ -20,6 +20,7 @@ class Brain:
         facts = self.memory.all_for_prompt()
         return (
             f"Você é {self.a['name']}, assistente pessoal inspirado no J.A.R.V.I.S. "
+            f"Agora: {self.tools.now_str()} ({self.tools.tz.key}). Use isso para datas relativas (hoje, amanhã). "
             f"Trate o usuário por '{self.a['user_title']}'. Idioma: {self.a['language']}. "
             "Seja objetivo, educado e levemente espirituoso. Respostas curtas (são faladas em voz alta), "
             "sem markdown. Use as ferramentas quando útil e nunca invente resultados delas. "

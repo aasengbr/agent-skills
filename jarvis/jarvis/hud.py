@@ -23,7 +23,7 @@ MAX_FAILS, FAIL_WINDOW = 10, 300  # tentativas inválidas por janela (segundos)
 
 class Hud:
     def __init__(self, port: int, on_ask, allowed_hosts=(), access_code: str = "", bind: str = "127.0.0.1",
-                 trust_proxy: bool = False, google_auth=None, audit_fn=None, usage_fn=None):
+                 trust_proxy: bool = False, google_auth=None, audit_fn=None, usage_fn=None, ack_fn=None):
         """Modo local: token aleatório por sessão embutido na página. Modo remoto (access_code):
         o código é persistente, NÃO é embutido na página e o usuário o digita no celular."""
         self.port = port
@@ -33,6 +33,7 @@ class Hud:
         self._fails: dict[str, list[float]] = {}  # tentativas inválidas por IP
         self.trust_proxy = trust_proxy  # atrás de proxy da nuvem: IP real = último item de X-Forwarded-For
         self.google_auth = google_auth
+        self.ack_fn = ack_fn  # confirma lembrete entregue
         self.audit_fn, self.usage_fn = audit_fn, usage_fn  # registro de ações e uso diário de tokens
         self.clients: list[queue.Queue] = []
         self.lock = threading.Lock()
@@ -202,6 +203,12 @@ class Hud:
                 if self.path == "/ask" and str(body.get("text", "")).strip():
                     threading.Thread(target=hud.on_ask, args=(str(body["text"]).strip(),), daemon=True).start()
                     return self._send(202)
+                if self.path == "/ack" and hud.ack_fn:
+                    try:
+                        hud.ack_fn(int(body.get("id")))
+                    except (TypeError, ValueError):
+                        return self._send(400)
+                    return self._send(204)
                 if self.path == "/confirm":
                     hud._ok = bool(body.get("ok"))
                     hud._answer.set()
