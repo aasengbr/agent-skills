@@ -80,6 +80,16 @@ O AASIS roda num servidor online e você o usa pelo Chrome do celular. Passo a p
 
 Na nuvem, as ferramentas do PC (abrir apps, visão de tela, status do PC) ficam desligadas e as confirmações só vêm pelo HUD (sem HUD aberto, ações sensíveis são negadas). O endereço é **público na internet**: a única barreira é o código, por isso o servidor exige 20+ caracteres, aceita só os hosts configurados e bloqueia por IP depois de 10 erros em 5 min. Não reutilize esse código em outro lugar.
 
+## Mundo: notícias, mercado, finanças e viagens
+O AASIS tem escopo aberto: responde sobre qualquer assunto e, para dados atuais, usa ferramentas em vez de inventar.
+- **Busca na web** (ferramenta do servidor da Anthropic, `web_search_20250305`): respostas com **fontes citadas** (links no HUD, não lidos em voz alta). Cobrada à parte pela Anthropic (a documentação informa US$ 10 por mil buscas; confira o preço atual). Limites: `web_search.max_uses` por pergunta e `budget.daily_searches` por dia. Se a organização desativou a busca no Console, a API devolve erro 400; o AASIS detecta, avisa e segue sem ela, em vez de parar tudo.
+- **Notícias** (`news`, Google News RSS), **câmbio e cripto** (`fx_rates`, AwesomeAPI), **ações** (`stock_quote`, Stooq; EUA com sufixo `.us`, B3 pela busca na web), **Selic/IPCA/dólar** (`bcb_indicators`, Banco Central), **clima** (`weather`, Open-Meteo) e **fuso horário** (`world_time`). Sem chaves de API. Dados de mercado podem estar atrasados e o AASIS é instruído a informar fonte e horário.
+- **Finanças e viagens:** o AASIS apresenta fatos, riscos e cenários e **não dá recomendação de investimento personalizada**; para viagens indica confirmar preços e regras em fonte oficial. Não há reserva de voos/hotéis nem acesso a corretoras.
+- `web_fetch` lê páginas públicas e agora bloqueia acesso a endereços internos (SSRF: localhost, redes privadas, metadados de nuvem), portas fora de 80/443, redirecionamentos para o interior e respostas gigantes. Limitação conhecida: a checagem de DNS e a conexão são feitas em momentos diferentes (DNS rebinding não é totalmente coberto).
+- **Agenda:** `calendar_update` e `calendar_delete` pedem confirmação mostrando o **título** do evento (e quantos convidados existem). Convidados **não são notificados**.
+
+**Não verificado:** os serviços gratuitos acima não eram alcançáveis no ambiente de desenvolvimento. Os formatos de resposta vêm da documentação que conheço e foram testados só com respostas simuladas. Se algum serviço mudar, a ferramenta devolve erro legível e o resto continua funcionando.
+
 ## Rotina: resumo do dia, tarefas e lembretes
 - **Resumo do dia** (`daily_brief`, botão ☀ no HUD): agenda das próximas 24h, e-mails não lidos dos últimos 2 dias, tarefas e lembretes pendentes. Se o Google não estiver conectado ou uma seção falhar, o resto do resumo sai normalmente.
 - **Tarefas** (`task_add/list/done/remove`): "anote pagar o boleto até 30/10". Prazo opcional.
@@ -114,6 +124,7 @@ Na nuvem, as ferramentas do PC (abrir apps, visão de tela, status do PC) ficam 
 | Controle de mouse/teclado | **Não implementado** (decisão deliberada: maior risco) |
 | Nuvem (Docker, login Google pelo navegador) | Implementada; servidor, bloqueio por IP, OAuth (com Google simulado) e inicialização em ambiente limpo testados. **A imagem Docker não foi construída** (sem Docker daemon no ambiente de build) e **nada foi implantado de fato** |
 | Android (PWA via Tailscale) | Implementado; servidor, login, bloqueio e layout testados no Chromium (emulação de celular). **Não testado em Android real, nem com Tailscale real, nem o microfone do Chrome** |
+| Mundo (web, notícias, mercado, clima, fuso) e agenda editável | Implementado; lógica, proteção anti-SSRF e tratamento de erros testados com respostas simuladas (mutações detectadas). **Nenhum serviço externo real foi chamado** |
 | Interface HUD estilo Iron Man | Implementado e testado (`pytest`, renderização no Chromium sem erros de JS). Não verificado em Windows/Edge |
 
 ## Referências de design

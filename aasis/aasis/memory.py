@@ -19,6 +19,7 @@ class Memory:
                 "created TEXT DEFAULT CURRENT_TIMESTAMP)"
             )
             self.db.execute("CREATE TABLE IF NOT EXISTS usage (day TEXT PRIMARY KEY, tokens INTEGER NOT NULL)")
+            self.db.execute("CREATE TABLE IF NOT EXISTS searches (day TEXT PRIMARY KEY, n INTEGER NOT NULL)")
             self.db.execute(
                 "CREATE TABLE IF NOT EXISTS audit (id INTEGER PRIMARY KEY, ts TEXT DEFAULT CURRENT_TIMESTAMP, "
                 "tool TEXT, args TEXT, status TEXT, note TEXT)"
@@ -74,6 +75,19 @@ class Memory:
                 "INSERT INTO usage(day, tokens) VALUES (?, ?) ON CONFLICT(day) DO UPDATE SET tokens = tokens + ?",
                 (self._today(), tokens, tokens),
             )
+            self.db.commit()
+
+    def searches_today(self) -> int:
+        with self._lock:
+            row = self.db.execute("SELECT n FROM searches WHERE day = ?", (self._today(),)).fetchone()
+        return row[0] if row else 0
+
+    def add_searches(self, n: int) -> None:
+        if n <= 0:
+            return
+        with self._lock:
+            self.db.execute("INSERT INTO searches(day, n) VALUES (?, ?) ON CONFLICT(day) DO UPDATE SET n = n + ?",
+                            (self._today(), n, n))
             self.db.commit()
 
     # ---------- auditoria: o que o AASIS executou ----------

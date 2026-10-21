@@ -79,6 +79,14 @@ function addLine(cls, who, text) {
   const d = document.createElement("div"); d.className = cls; d.textContent = who + ": " + text;
   $("transcript").appendChild(d); $("transcript").scrollTop = 1e9;
 }
+function addSources(items) {  // só links http(s); texto via textContent (sem HTML da internet)
+  const d = document.createElement("div"); d.className = "bot"; d.append("Fontes: ");
+  items.filter(x => /^https?:\/\//i.test(x.url)).forEach((x, i, a) => {
+    const l = document.createElement("a"); l.href = x.url; l.textContent = String(x.title).slice(0, 60);
+    l.target = "_blank"; l.rel = "noopener noreferrer"; l.style.color = "var(--c)"; d.append(l, i < a.length - 1 ? " · " : "");
+  });
+  $("transcript").appendChild(d); $("transcript").scrollTop = 1e9;
+}
 function addTool(name, args, result) {
   const d = document.createElement("div");
   d.textContent = name + " " + JSON.stringify(args) + (result ? " → " + String(result).slice(0,160) : "");
@@ -109,6 +117,8 @@ function onMsg(e) {
   else if (m.type === "usage") { $("ubox").style.display = "block";
     $("uv").textContent = m.limit ? m.used + " / " + m.limit : m.used + " (sem limite)";
     $("ub").style.width = m.limit ? Math.min(100, m.used / m.limit * 100) + "%" : "0"; }
+  else if (m.type === "sources") addSources(m.items);
+  else if (m.type === "notice") addLine("bot", "Aviso", m.text);
   else if (m.type === "reminder") showReminder(m);
   else if (m.type === "confirm") { $("act").textContent = m.action; $("modal").classList.add("on"); }
 }

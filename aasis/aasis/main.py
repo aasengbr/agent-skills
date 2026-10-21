@@ -52,9 +52,12 @@ def main() -> None:
         if hud:
             hud.publish(type_, **data)
 
-    def say(text: str) -> None:
+    def say(text: str, sources: list | None = None) -> None:
         print(f"{name}: {text}")
         emit("assistant", text=text)
+        if sources:  # fontes citadas pela busca na web (exigidas pela documentação); só na tela, não na voz
+            print("Fontes: " + "; ".join(f"{x['title']} <{x['url']}>" for x in sources))
+            emit("sources", items=sources)
         if voice:
             emit("state", state="speaking")
             voice.speak(text)
@@ -77,7 +80,7 @@ def main() -> None:
                 answer = brain.ask(text)
             except Exception as e:  # falha de rede/API: não deixa o painel preso em "pensando"
                 answer = f"Falha ao consultar a API ({type(e).__name__}). Tente novamente, {title}."
-            say(answer)
+            say(answer, brain.last_sources)
 
     if not args.text:
         from .voice import Voice

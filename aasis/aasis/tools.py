@@ -14,11 +14,12 @@ from .home import SCHEMAS as HOME_SCHEMAS
 from .home import Home
 from .memory import Memory
 from .vision import Screen
+from .world import World
 
 
 class Tools:
     def __init__(self, cfg: dict, memory: Memory, google: Google | None = None, screen: Screen | None = None,
-                 home: Home | None = None):
+                 home: Home | None = None, http=None):
         self.cfg = cfg
         self.memory = memory
         self.workspace = Path(cfg["safety"]["workspace"])
@@ -28,6 +29,8 @@ class Tools:
         self.cloud = bool(cfg.get("runtime", {}).get("cloud"))  # na nuvem: sem ferramentas do PC
         self.google = google or Google(cfg, data_dir())  # disponibilidade checada a cada uso (login pelo HUD)
         self.screen = screen or Screen(cfg)
+        self.world = World(http or requests.Session(), self.tz)
+        self.web_search_disabled = False  # ligado pelo cérebro se a API recusar a busca (400)
         home = home or Home(cfg)
         self.home = home if home.available else None
 
@@ -154,12 +157,34 @@ class Tools:
     def screen_look(self) -> list[dict]:
         return self.screen.look()
 
+    # ---------- mundo (veja world.py) ----------
     def web_fetch(self, url: str) -> str:
-        if not url.startswith(("http://", "https://")):
-            return "URL inválida."
-        r = requests.get(url, timeout=15, headers={"User-Agent": "AASIS/0.1"})
-        r.raise_for_status()
-        return r.text[:6000]
+        return self.world.web_fetch(url)
+
+    def news(self, topic: str, country: str = "BR", max_items: int = 6) -> str:
+        return self.world.news(topic, country, max_items)
+
+    def fx_rates(self, pairs: str = "USD-BRL,EUR-BRL,BTC-BRL") -> str:
+        return self.world.fx_rates(pairs)
+
+    def stock_quote(self, symbol: str) -> str:
+        return self.world.stock_quote(symbol)
+
+    def bcb_indicators(self) -> str:
+        return self.world.bcb_indicators()
+
+    def weather(self, city: str, days: int = 3) -> str:
+        return self.world.weather(city, days)
+
+    def world_time(self, timezone: str) -> str:
+        return self.world.world_time(timezone)
+
+    def _search_allowed(self) -> bool:
+        ws = self.cfg.get("web_search", {})
+        if not ws.get("enabled") or self.web_search_disabled:
+            return False
+        cap = int(self.cfg.get("budget", {}).get("daily_searches", 0))
+        return cap <= 0 or self.memory.searches_today() < cap
 
     # ---------- registro ----------
     def schemas(self) -> list[dict]:
@@ -194,7 +219,17 @@ class Tools:
                  "ex.: 2026-10-22T09:00:00).", {"text": s, "when": s, "in_minutes": i}, ["text"]),
             tool("reminder_list", "Lista lembretes pendentes."),
             tool("reminder_cancel", "Cancela lembrete pelo id.", {"id": i}, ["id"]),
-            tool("web_fetch", "Baixa o texto de uma URL http(s).", {"url": s}, ["url"]),
+            tool("web_fetch", "Lê o texto de uma página pública http(s).", {"url": s}, ["url"]),
+            tool("news", "Manchetes recentes sobre um assunto (Google News). country: BR ou US etc.",
+                 {"topic": s, "country": s, "max_items": i}, ["topic"]),
+            tool("fx_rates", "Câmbio e cripto em pares como USD-BRL,EUR-BRL,BTC-BRL.", {"pairs": s}),
+            tool("stock_quote", "Cotação de ação/índice (Stooq). EUA com sufixo .us, ex.: aapl.us.",
+                 {"symbol": s}, ["symbol"]),
+            tool("bcb_indicators", "Indicadores do Banco Central: meta Selic, IPCA do mês, dólar comercial."),
+            tool("weather", "Previsão do tempo de uma cidade (até 7 dias), útil para viagens.",
+                 {"city": s, "days": i}, ["city"]),
+            tool("world_time", "Hora atual em um fuso IANA (ex.: Europe/Lisbon) e diferença para o seu.",
+                 {"timezone": s}, ["timezone"]),
         ]
         if self.cloud:
             base = [t for t in base if t["name"] not in {"open_app", "system_status"}]
@@ -206,6 +241,11 @@ class Tools:
         if self.google.available:
             for name, desc, props, req in GOOGLE_SCHEMAS:
                 base.append(tool(name, desc, {k: {"type": v} for k, v in props.items()}, req))
+        if self._search_allowed():  # ferramenta do servidor (Anthropic): custa por busca, tem teto diário
+            ws = self.cfg["web_search"]
+            base.append({"type": "web_search_20250305", "name": "web_search", "max_uses": int(ws.get("max_uses", 3)),
+                         "user_location": {"type": "approximate", "country": ws.get("country", "BR"),
+                                           "timezone": self.tz.key}})
         return base
 
     def run(self, name: str, args: dict, confirm) -> str | list:
@@ -217,9 +257,15 @@ class Tools:
     def _run(self, name: str, args: dict, confirm) -> tuple[str | list, str]:
         if name not in {t["name"] for t in self.schemas()}:
             return f"Ferramenta desconhecida: {name}", "desconhecida"
-        fn = getattr(self, name, None) or getattr(self.google, name, None) or getattr(self.home, name)
+        fn = getattr(self, name, None) or getattr(self.google, name, None) or getattr(self.home, name, None)
         needs = name in self.confirm_tools or (name == "ha_call" and self.home.needs_confirm(args))
-        if needs and not confirm(f"{name} {args}"):
+        label = f"{name} {args}"
+        if needs and name in ("calendar_update", "calendar_delete"):  # mostra o título, não só o id
+            try:
+                label = f"{name}: {self.google.calendar_describe(args['event_id'])} | {args}"
+            except Exception:
+                pass
+        if needs and not confirm(label):
             return "Ação negada pelo usuário.", "negado"
         try:
             out = fn(**args)

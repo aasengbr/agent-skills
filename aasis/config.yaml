@@ -1,10 +1,10 @@
 assistant:
-  name: AASIS
+  name: AASIS               # AAS Intelligent System
   user_title: senhor        # como o assistente te chama
   language: pt-BR
   timezone: America/Sao_Paulo   # datas, lembretes e virada do teto diário (o servidor na nuvem roda em UTC)
   model: claude-sonnet-5-5  # cérebro (nuvem)
-  max_tokens: 1024
+  max_tokens: 1500
   max_tool_rounds: 6
   max_history_turns: 12     # turnos de conversa enviados a cada chamada (controla custo)
 
@@ -35,6 +35,8 @@ safety:
     - gmail_draft
     - calendar_create
     - drive_create_doc
+    - calendar_update
+    - calendar_delete
     - screen_look      # a imagem da tela sai do PC para a API
 
 google:                     # E-mail e Agenda (veja README: credentials.json)
@@ -54,4 +56,10 @@ home_assistant:             # casa inteligente (defina HA_TOKEN no .env)
   # lock, alarm_control_panel, script, automation, camera etc. ficam bloqueados e invisíveis
 
 budget:                     # teto diário de uso da API (soma de tokens de entrada e saída; 0 = sem limite)
+  daily_searches: 50        # buscas na web por dia (custam à parte: consulte o preço atual da Anthropic)
   daily_tokens: 500000      # valor estimado: ajuste olhando o seu consumo real no console da Anthropic
+
+web_search:                 # busca na web da própria API da Anthropic (precisa estar habilitada na sua organização)
+  enabled: true
+  max_uses: 3               # buscas por pergunta
+  country: BR               # localiza os resultados
