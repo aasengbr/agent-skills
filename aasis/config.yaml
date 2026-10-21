@@ -1,10 +1,10 @@
 assistant:
-  name: AASIS
+  name: AASIS               # AAS Intelligent System
   user_title: senhor        # como o assistente te chama
   language: pt-BR
   timezone: America/Sao_Paulo   # datas, lembretes e virada do teto diário (o servidor na nuvem roda em UTC)
   model: claude-sonnet-5-5  # cérebro (nuvem)
-  max_tokens: 1024
+  max_tokens: 1500
   max_tool_rounds: 6
   max_history_turns: 12     # turnos de conversa enviados a cada chamada (controla custo)
 
@@ -35,6 +35,8 @@ safety:
     - gmail_draft
     - calendar_create
     - drive_create_doc
+    - calendar_update
+    - calendar_delete
     - screen_look      # a imagem da tela sai do PC para a API
 
 google:                     # E-mail e Agenda (veja README: credentials.json)
@@ -54,4 +56,39 @@ home_assistant:             # casa inteligente (defina HA_TOKEN no .env)
   # lock, alarm_control_panel, script, automation, camera etc. ficam bloqueados e invisíveis
 
 budget:                     # teto diário de uso da API (soma de tokens de entrada e saída; 0 = sem limite)
+  daily_searches: 50        # buscas na web por dia (custam à parte: consulte o preço atual da Anthropic)
   daily_tokens: 500000      # valor estimado: ajuste olhando o seu consumo real no console da Anthropic
+
+web_search:                 # busca na web da própria API da Anthropic (precisa estar habilitada na sua organização)
+  enabled: true
+  max_uses: 3               # buscas por pergunta
+  country: BR               # localiza os resultados
+
+llm:                        # orquestrador de IAs: provedores, modelos, rotas por tarefa e privacidade
+  providers:
+    anthropic: {type: anthropic, trust: trusted}
+    # Todos abaixo falam o protocolo OpenAI (/chat/completions). Só ficam ativos se a chave existir no ambiente.
+    ollama:     {type: openai, trust: local,    base_url: "http://localhost:11434/v1", key_env: ""}   # só alcança o PC onde roda
+    deepseek:   {type: openai, trust: external, base_url: "https://api.deepseek.com",       key_env: DEEPSEEK_API_KEY}
+    moonshot:   {type: openai, trust: external, base_url: "https://api.moonshot.ai/v1",     key_env: MOONSHOT_API_KEY}
+    zai:        {type: openai, trust: external, base_url: "https://api.z.ai/api/paas/v4",   key_env: ZAI_API_KEY}
+    nvidia:     {type: openai, trust: external, base_url: "https://integrate.api.nvidia.com/v1", key_env: NVIDIA_API_KEY, rpm: 30}
+    openrouter: {type: openai, trust: external, base_url: "https://openrouter.ai/api/v1",   key_env: OPENROUTER_API_KEY}
+  models:                   # apelido -> provedor + ID. ID vazio usa a variável id_env (defina no ambiente)
+    haiku:      {provider: anthropic, id: claude-haiku-5-5,  tools: true, vision: true, effort: low}
+    sonnet:     {provider: anthropic, id: claude-sonnet-5-5, tools: true, vision: true, effort: medium}
+    opus:       {provider: anthropic, id: claude-opus-5-5,   tools: true, vision: true, effort: high}
+    # IDs abaixo NÃO foram verificados em fonte oficial (ver docs/orchestrator.md). Confirme em /llm/models.
+    deepseek:   {provider: deepseek,   id: deepseek-chat, tools: true}
+    kimi:       {provider: moonshot,   id: kimi-k3,       tools: true}
+    glm:        {provider: zai,        id: glm-5,         tools: false}   # suporte a ferramentas não confirmado
+    nim:        {provider: nvidia,     id_env: NVIDIA_MODEL,     tools: false}
+    openrouter: {provider: openrouter, id_env: OPENROUTER_MODEL, tools: true}
+    local:      {provider: ollama,     id_env: OLLAMA_MODEL,     tools: true}
+  routes:                   # tarefa -> modelos em ordem de preferência; o próximo assume se o anterior falhar
+    chat:   [sonnet, deepseek, kimi, openrouter]
+    deep:   [opus, sonnet]
+    memory: [haiku, local]
+    quick:  [haiku, sonnet]
+  privacy:                  # nível máximo de dado que cada tipo de provedor pode ver
+    max_level: {local: 3, trusted: 2, external: 0}   # 0 normal, 1 privado, 2 sensível (saúde/finanças), 3 secreto

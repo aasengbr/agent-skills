@@ -52,9 +52,12 @@ def main() -> None:
         if hud:
             hud.publish(type_, **data)
 
-    def say(text: str) -> None:
+    def say(text: str, sources: list | None = None) -> None:
         print(f"{name}: {text}")
         emit("assistant", text=text)
+        if sources:  # fontes citadas pela busca na web (exigidas pela documentação); só na tela, não na voz
+            print("Fontes: " + "; ".join(f"{x['title']} <{x['url']}>" for x in sources))
+            emit("sources", items=sources)
         if voice:
             emit("state", state="speaking")
             voice.speak(text)
@@ -69,15 +72,15 @@ def main() -> None:
             return hud.confirm(action)
         return input(f"Confirma a ação: {action}? (s/n) ").strip().lower() in {"s", "sim", "y", "yes"}
 
-    def handle(text: str) -> None:
+    def handle(text: str, deep: bool = False) -> None:
         with busy:
             print(f"Você: {text}")
             emit("user", text=text)
             try:
-                answer = brain.ask(text)
+                answer = brain.ask(text, deep=deep)
             except Exception as e:  # falha de rede/API: não deixa o painel preso em "pensando"
                 answer = f"Falha ao consultar a API ({type(e).__name__}). Tente novamente, {title}."
-            say(answer)
+            say(answer, brain.last_sources)
 
     if not args.text:
         from .voice import Voice
@@ -94,10 +97,14 @@ def main() -> None:
                          data_dir() / gcfg.get("token_file", "token.json"))
             hud = Hud(int(os.getenv("PORT", args.port)), handle, allowed_hosts=args.allow_host, access_code=code,
                       bind="0.0.0.0", trust_proxy=True, google_auth=ga,
-                      audit_fn=memory.recent_actions, usage_fn=brain.usage, ack_fn=memory.ack_reminder)
+                      audit_fn=memory.recent_actions, usage_fn=brain.usage, ack_fn=memory.ack_reminder,
+                      llm_status_fn=brain.orch.status, llm_test_fn=brain.orch.test,
+                      llm_models_fn=brain.orch.list_models)
         else:
             hud = Hud(args.port, handle, allowed_hosts=args.allow_host, access_code=code if remote else "",
-                      audit_fn=memory.recent_actions, usage_fn=brain.usage, ack_fn=memory.ack_reminder)
+                      audit_fn=memory.recent_actions, usage_fn=brain.usage, ack_fn=memory.ack_reminder,
+                      llm_status_fn=brain.orch.status, llm_test_fn=brain.orch.test,
+                      llm_models_fn=brain.orch.list_models)
         url = hud.start()
         print(f"HUD: {url}" + (f"  (remoto: {', '.join(args.allow_host)})" if remote else ""))
         if not remote:

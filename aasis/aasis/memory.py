@@ -18,7 +18,9 @@ class Memory:
                 "id INTEGER PRIMARY KEY, text TEXT NOT NULL, "
                 "created TEXT DEFAULT CURRENT_TIMESTAMP)"
             )
-            self.db.execute("CREATE TABLE IF NOT EXISTS usage (day TEXT PRIMARY KEY, tokens INTEGER NOT NULL)")
+            self.db.execute("CREATE TABLE IF NOT EXISTS usage_by (day TEXT, provider TEXT, tokens INTEGER NOT NULL, "
+                            "PRIMARY KEY (day, provider))")
+            self.db.execute("CREATE TABLE IF NOT EXISTS searches (day TEXT PRIMARY KEY, n INTEGER NOT NULL)")
             self.db.execute(
                 "CREATE TABLE IF NOT EXISTS audit (id INTEGER PRIMARY KEY, ts TEXT DEFAULT CURRENT_TIMESTAMP, "
                 "tool TEXT, args TEXT, status TEXT, note TEXT)"
@@ -61,19 +63,37 @@ class Memory:
         return "\n".join(f"- {f}" for f in self.recall("", limit))
 
     # ---------- uso diário de tokens (teto de gasto) ----------
-    def usage_today(self) -> int:
+    def usage_today(self, provider: str | None = None) -> int:
+        """Tokens do dia, de um provedor ou (sem argumento) de todos."""
         with self._lock:
-            row = self.db.execute(
-                "SELECT tokens FROM usage WHERE day = ?", (self._today(),)
-            ).fetchone()
+            if provider is None:
+                row = self.db.execute("SELECT COALESCE(SUM(tokens), 0) FROM usage_by WHERE day = ?",
+                                      (self._today(),)).fetchone()
+            else:
+                row = self.db.execute("SELECT tokens FROM usage_by WHERE day = ? AND provider = ?",
+                                      (self._today(), provider)).fetchone()
         return row[0] if row else 0
 
-    def add_usage(self, tokens: int) -> None:
+    def add_usage(self, tokens: int, provider: str = "anthropic") -> None:
         with self._lock:
             self.db.execute(
-                "INSERT INTO usage(day, tokens) VALUES (?, ?) ON CONFLICT(day) DO UPDATE SET tokens = tokens + ?",
-                (self._today(), tokens, tokens),
+                "INSERT INTO usage_by(day, provider, tokens) VALUES (?, ?, ?) "
+                "ON CONFLICT(day, provider) DO UPDATE SET tokens = tokens + ?",
+                (self._today(), provider, tokens, tokens),
             )
+            self.db.commit()
+
+    def searches_today(self) -> int:
+        with self._lock:
+            row = self.db.execute("SELECT n FROM searches WHERE day = ?", (self._today(),)).fetchone()
+        return row[0] if row else 0
+
+    def add_searches(self, n: int) -> None:
+        if n <= 0:
+            return
+        with self._lock:
+            self.db.execute("INSERT INTO searches(day, n) VALUES (?, ?) ON CONFLICT(day) DO UPDATE SET n = n + ?",
+                            (self._today(), n, n))
             self.db.commit()
 
     # ---------- auditoria: o que o AASIS executou ----------

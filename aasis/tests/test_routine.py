@@ -120,7 +120,8 @@ def test_system_prompt_has_now_and_get_time_uses_tz():
     with tempfile.TemporaryDirectory() as tmp:
         t, mem, cfg = make(tmp)
         b = Brain(cfg, t, mem, lambda _: True)
-        assert "Agora:" in b._system() and "America/Sao_Paulo" in b._system()
+        assert "Agora:" in b._volatile(3) and "America/Sao_Paulo" in b._volatile(3)
+        assert "Agora:" not in b._stable()                       # o prefixo estável não muda a cada minuto (cache)
         assert "(America/Sao_Paulo)" in t.get_time()
 
 

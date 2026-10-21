@@ -23,7 +23,8 @@ MAX_FAILS, FAIL_WINDOW = 10, 300  # tentativas inválidas por janela (segundos)
 
 class Hud:
     def __init__(self, port: int, on_ask, allowed_hosts=(), access_code: str = "", bind: str = "127.0.0.1",
-                 trust_proxy: bool = False, google_auth=None, audit_fn=None, usage_fn=None, ack_fn=None):
+                 trust_proxy: bool = False, google_auth=None, audit_fn=None, usage_fn=None, ack_fn=None,
+                 llm_status_fn=None, llm_test_fn=None, llm_models_fn=None):
         """Modo local: token aleatório por sessão embutido na página. Modo remoto (access_code):
         o código é persistente, NÃO é embutido na página e o usuário o digita no celular."""
         self.port = port
@@ -34,6 +35,7 @@ class Hud:
         self.trust_proxy = trust_proxy  # atrás de proxy da nuvem: IP real = último item de X-Forwarded-For
         self.google_auth = google_auth
         self.ack_fn = ack_fn  # confirma lembrete entregue
+        self.llm_status_fn, self.llm_test_fn, self.llm_models_fn = llm_status_fn, llm_test_fn, llm_models_fn
         self.audit_fn, self.usage_fn = audit_fn, usage_fn  # registro de ações e uso diário de tokens
         self.clients: list[queue.Queue] = []
         self.lock = threading.Lock()
@@ -136,6 +138,15 @@ class Hud:
                     return self._send(200, b"ok")
                 if not self._host_ok():
                     return self._send(403)
+                if parts.path in ("/llm/status", "/llm/models"):
+                    fn = hud.llm_status_fn if parts.path == "/llm/status" else hud.llm_models_fn
+                    if not fn or not self._auth(query.get("token", [""])[0]):
+                        return self._send(403)
+                    try:
+                        data = fn() if parts.path == "/llm/status" else fn(query.get("provider", [""])[0])
+                    except Exception as e:  # ex.: provedor sem chave ou fora do ar
+                        data = {"error": f"{type(e).__name__}: {str(e)[:150]}"}
+                    return self._send(200, json.dumps(data, ensure_ascii=False).encode(), "application/json; charset=utf-8")
                 if parts.path == "/audit":
                     if not hud.audit_fn or not self._auth(query.get("token", [""])[0]):
                         return self._send(403)
@@ -201,8 +212,12 @@ class Hud:
                 except ValueError:
                     return self._send(400)
                 if self.path == "/ask" and str(body.get("text", "")).strip():
-                    threading.Thread(target=hud.on_ask, args=(str(body["text"]).strip(),), daemon=True).start()
+                    kw = {"deep": True} if body.get("deep") else {}  # modo profundo: modelo mais capaz, uma pergunta
+                    threading.Thread(target=hud.on_ask, args=(str(body["text"]).strip(),), kwargs=kw, daemon=True).start()
                     return self._send(202)
+                if self.path == "/llm/test" and hud.llm_test_fn:
+                    out = hud.llm_test_fn(str(body.get("alias", ""))[:40])
+                    return self._send(200, json.dumps(out, ensure_ascii=False).encode(), "application/json; charset=utf-8")
                 if self.path == "/ack" and hud.ack_fn:
                     try:
                         hud.ack_fn(int(body.get("id")))

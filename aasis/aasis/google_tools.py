@@ -197,6 +197,38 @@ class Google:
         e = self._svc("calendar", "v3").events().insert(calendarId="primary", body=body).execute()
         return f"Evento criado (id {e['id']}): {summary}, {start}"
 
+    def _event_time(self, value: str) -> dict:
+        dt.datetime.fromisoformat(value)  # valida o formato
+        return {"dateTime": value, "timeZone": self.tz}
+
+    def calendar_describe(self, event_id: str) -> str:
+        """Texto legível do evento, usado na confirmação (o id sozinho não diz nada ao usuário)."""
+        e = self._svc("calendar", "v3").events().get(calendarId="primary", eventId=event_id).execute()
+        guests = len(e.get("attendees", []))
+        extra = f", com {guests} convidado(s) que NÃO serão notificados" if guests else ""
+        return f"'{e.get('summary', '(sem título)')}' em {e['start'].get('dateTime', e['start'].get('date'))}{extra}"
+
+    def calendar_update(self, event_id: str, summary: str = "", start: str = "", end: str = "",
+                        description: str = "") -> str:
+        body = {}
+        if summary:
+            body["summary"] = summary
+        if description:
+            body["description"] = description
+        if start:
+            body["start"] = self._event_time(start)
+        if end:
+            body["end"] = self._event_time(end)
+        if not body:
+            raise ValueError("Nada para alterar.")
+        e = self._svc("calendar", "v3").events().patch(
+            calendarId="primary", eventId=event_id, body=body, sendUpdates="none").execute()
+        return f"Evento atualizado: {e.get('summary', event_id)}"
+
+    def calendar_delete(self, event_id: str) -> str:
+        self._svc("calendar", "v3").events().delete(calendarId="primary", eventId=event_id, sendUpdates="none").execute()
+        return "Evento apagado."
+
     # ---------- Drive ----------
     EXPORT = {
         "application/vnd.google-apps.document": "text/plain",
@@ -242,6 +274,10 @@ class Google:
 
 
 SCHEMAS = [
+    ("calendar_update", "Altera um evento (use o id de calendar_list). Só os campos informados mudam. start/end em "
+     "ISO 8601 sem fuso.", {"event_id": "string", "summary": "string", "start": "string", "end": "string",
+                            "description": "string"}, ["event_id"]),
+    ("calendar_delete", "Apaga um evento pelo id (use calendar_list antes).", {"event_id": "string"}, ["event_id"]),
     ("drive_search", "Busca arquivos no Google Drive por nome ou conteúdo.",
      {"query": "string", "max_results": "integer"}, ["query"]),
     ("drive_read", "Lê o texto de um arquivo do Drive (Docs, Planilhas, Apresentações, texto) pelo id.",
