@@ -107,9 +107,11 @@ def test_taken_decrements_stock_exactly_once():
         d = m.due_doses(t)[0]
         out = m.act(d["id"], "taken", t)
         assert "tomada às 08:03" in out and "Restam 8" in out
-        assert "já registrada" in m.act(d["id"], "taken", t)          # duplo toque: não baixa de novo
-        assert "já registrada" in m.act(d["id"], "skipped", t)        # nem vira "pulada" depois de tomada
+        assert "já registrada como tomada" in m.act(d["id"], "taken", t)      # duplo toque: não baixa de novo
+        assert "já registrada como tomada" in m.act(d["id"], "skipped", t)    # nem vira "pulada" depois de tomada
+        assert "já registrada como tomada" in m.act(d["id"], "snooze", t)     # nem adia uma dose já tomada
         assert m.get(mid)["stock"] == 8
+        assert m.get_dose(d["id"])["state"] == "taken"
         assert m.due_doses(t + dt.timedelta(hours=1)) == []
 
 

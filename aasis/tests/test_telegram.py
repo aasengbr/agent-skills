@@ -122,6 +122,31 @@ def test_strangers_and_groups_are_ignored_completely():
     assert got == [] and http.sent() == [] and http.sent("editMessageText") == []
 
 
+def test_group_chat_is_ignored_even_with_owner_ids():
+    """Defesa em profundidade: mesmo com id e remetente do dono, só conversa privada vale."""
+    http, got = FakeHttp(), []
+    tg = make(http, on_text=got.append, on_action=got.append)
+    http.updates = [msg("oi", uid=OWNER, chat_type="group", chat_id=OWNER, update_id=1),
+                    msg("oi", uid=OWNER, chat_type="supergroup", chat_id=OWNER, update_id=2)]
+    tg.run_once(0)
+    time.sleep(0.1)
+    assert got == [] and http.sent() == []
+
+
+def test_double_tap_cannot_flip_a_decided_confirmation():
+    """Sim seguido de Não (toque duplo) antes de quem espera ler a resposta: vale a primeira."""
+    http = FakeHttp()
+    tg = make(http)
+    slot = {"event": threading.Event(), "answer": False}
+    tg._pending["tok"] = slot
+    http.updates = [cb("c:y:tok", update_id=1), cb("c:n:tok", update_id=2)]
+    tg.run_once(0)
+    assert slot["event"].is_set() and slot["answer"] is True
+    http.updates = [cb("c:n:tok", update_id=3)]
+    tg.run_once(0)
+    assert slot["answer"] is True
+
+
 def test_unknown_start_gets_chat_id_once_per_hour():
     http = FakeHttp()
     tg = make(http)
