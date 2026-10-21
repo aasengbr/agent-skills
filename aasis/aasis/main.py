@@ -58,9 +58,10 @@ def main() -> None:
             hud.publish(type_, **data)
 
     def say(text: str, sources: list | None = None) -> None:
-        print(f"{name}: {text}")
+        if not args.serve:  # no servidor o stdout vira log (docker logs): conteúdo de conversa não vai para lá
+            print(f"{name}: {text}")
         emit("assistant", text=text)
-        if sources:  # fontes citadas pela busca na web (exigidas pela documentação); só na tela, não na voz
+        if sources and not args.serve:  # fontes citadas pela busca na web (exigidas pela documentação); só na tela, não na voz
             print("Fontes: " + "; ".join(f"{x['title']} <{x['url']}>" for x in sources))
             emit("sources", items=sources)
         if voice:
@@ -84,7 +85,8 @@ def main() -> None:
 
     def handle(text: str, deep: bool = False) -> None:
         with busy:
-            print(f"Você: {text}")
+            if not args.serve:
+                print(f"Você: {text}")
             emit("user", text=text)
             try:
                 answer = brain.ask(text, deep=deep)

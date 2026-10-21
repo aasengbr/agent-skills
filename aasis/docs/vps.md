@@ -113,7 +113,7 @@ Leva alguns minutos na primeira vez. Depois: `https://SEU-DOMINIO`, digite o có
 Mesmas variáveis do README principal, no arquivo `.env`. Depois de editar: `docker compose up -d`.
 
 ### 5. Telegram, remédios e monitor externo
-Coloque `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` e `HEALTHCHECK_URL` no mesmo `.env` (passo a passo em [`telegram-meds.md`](telegram-meds.md)). É isto que torna o lembrete de remédio confiável: chega com o app fechado, e o monitor externo avisa se o servidor cair.
+Coloque `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` e `HEALTHCHECK_URL` no mesmo `.env` (passo a passo em [`telegram-meds.md`](telegram-meds.md)); depois rode o diagnóstico e o teste de aceitação de [`deploy-checklist.md`](deploy-checklist.md). É isto que torna o lembrete de remédio confiável: chega com o app fechado, e o monitor externo avisa se o servidor cair.
 
 ## Segurança: o que já vem e o que é com você
 

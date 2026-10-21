@@ -92,6 +92,7 @@ mudam** (onde está o carro: o valor novo substitui o antigo e o histórico fica
   (em garagem coberta o GPS erra: confie na nota).
 - **Medido:** acerta 100% das perguntas por palavra e ~87% das perguntas novas com ~600 memórias parecidas; memória
   pequena vai inteira ao modelo. Avaliação, limites e como repetir: [`docs/memory-design.md`](docs/memory-design.md) seção 13.
+- **Implantação (roteiro, diagnóstico `python -m aasis.doctor` e teste de aceitação):** [`docs/deploy-checklist.md`](docs/deploy-checklist.md).
 - **Telegram + remédios** (alertas confiáveis com botões Tomei/Adiar/Pular, estoque, dose perdida, monitor externo): [`docs/telegram-meds.md`](docs/telegram-meds.md). Testado só em simulação.
 - Limites e o que falta (criptografia em repouso, backup cifrado, embeddings): [`docs/memory-design.md`](docs/memory-design.md).
 - **Atenção:** os dados de saúde ficam em texto no banco do servidor e os trechos usados numa resposta vão à API da

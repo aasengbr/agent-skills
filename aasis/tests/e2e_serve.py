@@ -222,6 +222,9 @@ def main():
                 r.check("após OK, não reenvia", len([e for e in r.events if e["type"] == "reminder"]) == n0)
 
             print("7) Backup diário e persistência após reiniciar")
+            logtxt = (Path(tmp) / f"server{r.port}.log").read_text()
+            r.check("log do servidor não guarda conversa nem memória",
+                    all(x not in logtxt for x in ("gato chamado Tom", "Losartana", "que horas são", "Teste e2e")), "conteúdo no stdout")
             r.check("backup criado em /data/backups", any((data / "backups").glob("aasis-*.db")))
             r.stop()
             r2 = Run(tmp, srv.server_address[1], free_port(), data)

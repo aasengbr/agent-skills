@@ -41,6 +41,8 @@ class FakeHttp:
         if method == "getUpdates":
             ups, self.updates = self.updates, []
             return Resp({"ok": True, "result": ups})
+        if method == "getMe":
+            return Resp({"ok": True, "result": {"id": 1, "is_bot": True, "username": "aasis_teste_bot"}})
         if method == "sendMessage":
             self.next_id += 1
             return Resp({"ok": True, "result": {"message_id": self.next_id}})
