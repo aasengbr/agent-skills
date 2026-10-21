@@ -1,0 +1,33 @@
+assistant:
+  name: JARVIS
+  user_title: senhor        # como o assistente te chama
+  language: pt-BR
+  model: claude-sonnet-5-5  # cérebro (nuvem)
+  max_tokens: 1024
+  max_tool_rounds: 6
+
+voice:
+  wake_word: hey_jarvis     # modelo openWakeWord
+  wake_threshold: 0.5
+  stt_model: small          # faster-whisper: tiny | base | small (CPU, 16GB RAM)
+  stt_compute_type: int8
+  silence_seconds: 1.2      # fim da frase
+  max_record_seconds: 15
+  tts_rate: 185
+
+safety:
+  # Pastas que o JARVIS pode ler/escrever. Tudo fora disso é bloqueado.
+  workspace: "~/jarvis-workspace"
+  # Apps que podem ser abertos (nome amigável -> comando do Windows)
+  apps:
+    navegador: "start msedge"
+    chrome: "start chrome"
+    bloco de notas: "notepad"
+    calculadora: "calc"
+    explorador: "explorer"
+    vscode: "code"
+  # Ferramentas que exigem confirmação verbal/escrita antes de executar
+  confirm_tools:
+    - write_file
+    - open_app
+    - set_volume
