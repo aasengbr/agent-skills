@@ -6,6 +6,7 @@ import threading
 import webbrowser
 from zoneinfo import ZoneInfo
 
+from .backup import start_backup_loop
 from .brain import Brain
 from .config import data_dir, load_config
 from .google_tools import WebAuth
@@ -81,6 +82,7 @@ def main() -> None:
             except Exception as e:  # falha de rede/API: não deixa o painel preso em "pensando"
                 answer = f"Falha ao consultar a API ({type(e).__name__}). Tente novamente, {title}."
             say(answer, brain.last_sources)
+            threading.Thread(target=brain.learn, args=(text,), daemon=True).start()  # aprende depois de responder
 
     if not args.text:
         from .voice import Voice
@@ -99,12 +101,12 @@ def main() -> None:
                       bind="0.0.0.0", trust_proxy=True, google_auth=ga,
                       audit_fn=memory.recent_actions, usage_fn=brain.usage, ack_fn=memory.ack_reminder,
                       llm_status_fn=brain.orch.status, llm_test_fn=brain.orch.test,
-                      llm_models_fn=brain.orch.list_models)
+                      llm_models_fn=brain.orch.list_models, memory=memory)
         else:
             hud = Hud(args.port, handle, allowed_hosts=args.allow_host, access_code=code if remote else "",
                       audit_fn=memory.recent_actions, usage_fn=brain.usage, ack_fn=memory.ack_reminder,
                       llm_status_fn=brain.orch.status, llm_test_fn=brain.orch.test,
-                      llm_models_fn=brain.orch.list_models)
+                      llm_models_fn=brain.orch.list_models, memory=memory)
         url = hud.start()
         print(f"HUD: {url}" + (f"  (remoto: {', '.join(args.allow_host)})" if remote else ""))
         if not remote:
@@ -120,6 +122,9 @@ def main() -> None:
             if voice:
                 voice.speak(f"Lembrete, {title}: {r['text']}")
             memory.ack_reminder(r["id"])
+
+    if args.serve and cfg.get("backup", {}).get("enabled", True):  # cópia diária do banco em /data/backups
+        start_backup_loop(data_dir() / "aasis.db", data_dir() / "backups", int(cfg.get("backup", {}).get("keep", 14)))
 
     # na nuvem só entrega com um HUD aberto (senão o lembrete se perderia); fora dela, sempre
     Scheduler(memory, deliver, ready=(lambda: hud.has_clients()) if args.serve else (lambda: True)).start()

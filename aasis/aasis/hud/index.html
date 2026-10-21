@@ -35,6 +35,10 @@
   .dot { width:8px; height:8px; border-radius:50%; display:inline-block; }
   .mrow button { min-height:24px; padding:0 6px; font-size:11px; } .mrow a { color:var(--c); }
   #deep.on { background:var(--c); color:#001018; }
+  #memov { display:none; position:fixed; inset:0; background:rgba(0,0,0,.8); z-index:7; align-items:center; justify-content:center; }
+  #memov.on { display:flex; } #memov .box { border:1px solid var(--c); background:var(--bg); padding:16px; width:min(94vw,640px); max-height:88vh; overflow-y:auto; }
+  .mem { font-size:13px; margin:6px 0; display:flex; gap:8px; align-items:flex-start; justify-content:space-between; border-left:2px solid var(--c); padding-left:8px; }
+  .mem.pend { border-color:#ffb300; } .mem small { opacity:.65; display:block; } .mem button { min-height:28px; padding:0 8px; }
   #alerts { position:fixed; top:10px; left:10px; right:10px; z-index:8; display:flex; flex-direction:column; gap:8px; pointer-events:none; }
   .alert { pointer-events:auto; border:1px solid #ffb300; background:#120d00; color:#ffb300; padding:12px; display:flex; gap:10px; align-items:center; justify-content:space-between; }
   .alert button { background:#ffb300; min-height:36px; }
@@ -63,12 +67,14 @@
 <div class="panel"><h2>FERRAMENTAS</h2><div id="log"></div></div>
 <div class="panel" id="bottom">
   <div id="transcript"></div>
-  <div id="chips"><button type="button" data-q="Faça meu resumo do dia.">☀ Resumo do dia</button><button type="button" data-q="Quais são minhas tarefas pendentes?">☑ Tarefas</button><button type="button" data-q="Quais lembretes tenho pendentes?">⏰ Lembretes</button><button type="button" id="deep" title="Usa o modelo mais capaz na próxima pergunta">🧠 Profundo</button><button type="button" id="bell">🔔 Avisos</button></div>
+  <div id="chips"><button type="button" data-q="Faça meu resumo do dia.">☀ Resumo do dia</button><button type="button" data-q="Quais são minhas tarefas pendentes?">☑ Tarefas</button><button type="button" data-q="Quais lembretes tenho pendentes?">⏰ Lembretes</button><button type="button" id="deep" title="Usa o modelo mais capaz na próxima pergunta">🧠 Profundo</button><button type="button" id="park" title="Guarda onde você estacionou (GPS do celular)">📍 Estacionei aqui</button><button type="button" id="memb">🗂 Memória</button><button type="button" id="bell">🔔 Avisos</button></div>
   <form id="f"><button type="button" id="mic" title="Falar">🎤</button><button type="button" id="spk" class="off" title="Ler respostas em voz alta">🔊</button>
     <input id="q" autocomplete="off" placeholder="Digite ou fale um comando..."><button>ENVIAR</button></form>
 </div>
 <div id="alerts"></div>
 <div id="login"><form id="lf"><h2>CÓDIGO DE ACESSO</h2><input id="code" type="password" autocomplete="current-password" placeholder="Código do AASIS"><p id="lerr"></p><button>ENTRAR</button></form></div>
+<div id="memov"><div class="box"><h2>MEMÓRIA</h2><div id="memlist"></div>
+  <p><a id="memexp" target="_blank" rel="noopener">Exportar tudo (JSON)</a> · <button type="button" id="memclose">FECHAR</button></p></div></div>
 <div id="modal"><div class="box"><h2>CONFIRMAÇÃO NECESSÁRIA</h2><p id="act"></p>
   <button id="yes">AUTORIZAR</button><button id="no">NEGAR</button></div></div>
 <script>
@@ -153,6 +159,7 @@ function onMsg(e) {
   else if (m.type === "model") $("lastmodel").textContent = "último: " + m.alias + " (" + m.provider + ")";
   else if (m.type === "sources") addSources(m.items);
   else if (m.type === "notice") addLine("bot", "Aviso", m.text);
+  else if (m.type === "memory_pending") showPending(m);
   else if (m.type === "reminder") showReminder(m);
   else if (m.type === "confirm") { $("act").textContent = m.action; $("modal").classList.add("on"); }
 }
@@ -188,6 +195,46 @@ function showReminder(m) {
 }
 $("bell").onclick = () => { if (window.Notification) Notification.requestPermission().then(p => { $("bell").textContent = p === "granted" ? "🔔 Ativados" : "🔕 Bloqueados"; }); };
 document.querySelectorAll("#chips button[data-q]").forEach(b => b.onclick = () => ask(b.dataset.q));
+
+// Memória: ver, aprovar pendentes, apagar, exportar. Texto sempre via textContent.
+const LV = ["normal", "pessoal", "sensível", "secreto"];
+async function memAct(path, id) { await post("/memory/" + path, {id}); loadMemory(); }
+async function loadMemory() {
+  const r = await fetch("/memory/list?token=" + encodeURIComponent(TOKEN)); if (!r.ok) return;
+  const d = await r.json(); const box = $("memlist"); box.textContent = "";
+  const row = (m, pend) => {
+    const e = document.createElement("div"); e.className = "mem" + (pend ? " pend" : "");
+    const t = document.createElement("span"); t.textContent = m.content;
+    const sm = document.createElement("small"); sm.textContent = m.kind + (m.slot ? " · " + m.slot : "") + " · " + LV[m.level] + " · " + m.source; t.appendChild(sm);
+    const bs = document.createElement("span");
+    const mk = (label, fn) => { const b = document.createElement("button"); b.type = "button"; b.textContent = label; b.onclick = fn; bs.appendChild(b); };
+    if (pend) { mk("Sim", () => memAct("approve", m.id)); mk("Não", () => memAct("reject", m.id)); }
+    else mk("✕", () => { if (confirm("Esquecer isto?\n\n" + m.content)) memAct("delete", m.id); });
+    e.append(t, bs); box.appendChild(e);
+  };
+  if (d.pending.length) { const h = document.createElement("h2"); h.textContent = "PENDENTES (aguardam sua aprovação)"; box.appendChild(h); d.pending.forEach(m => row(m, true)); }
+  const h2 = document.createElement("h2"); h2.textContent = "GUARDADO (" + d.active.length + ")"; box.appendChild(h2);
+  if (!d.active.length) box.appendChild(document.createTextNode("Nada ainda."));
+  d.active.forEach(m => row(m, false));
+}
+$("memb").onclick = () => { $("memexp").href = "/memory/export?token=" + encodeURIComponent(TOKEN); $("memov").classList.add("on"); loadMemory(); };
+$("memclose").onclick = () => $("memov").classList.remove("on");
+$("park").onclick = () => {
+  if (!navigator.geolocation) return addLine("bot", "Aviso", "Este aparelho não oferece localização.");
+  navigator.geolocation.getCurrentPosition(async pos => {
+    const note = prompt("Nota opcional (nível, vaga, ponto de referência):") || "";
+    const r = await post("/memory/park", {lat: pos.coords.latitude, lon: pos.coords.longitude, accuracy: pos.coords.accuracy, note});
+    addLine("bot", "AASIS", r.ok ? "Guardei onde você estacionou. (Em garagem coberta o GPS erra: confie na nota.)" : "Não consegui guardar.");
+  }, () => addLine("bot", "Aviso", "Sem permissão de localização."), {enableHighAccuracy: true, timeout: 15000});
+};
+function showPending(m) {  // "Posso anotar isto?" (saúde, finanças, perfil)
+  const id = "p" + m.id; if (document.getElementById(id)) return;
+  const el = document.createElement("div"); el.className = "alert"; el.id = id;
+  const t = document.createElement("span"); t.textContent = "Posso anotar: " + m.text + "?";
+  const y = document.createElement("button"); y.textContent = "Sim"; y.onclick = () => { post("/memory/approve", {id: m.id}); el.remove(); };
+  const n = document.createElement("button"); n.textContent = "Não"; n.onclick = () => { post("/memory/reject", {id: m.id}); el.remove(); };
+  el.append(t, y, n); $("alerts").appendChild(el);
+}
 
 // Voz no navegador (Android/Chrome). O reconhecimento usa o serviço de voz do Google.
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;

@@ -1,0 +1,13 @@
+# HTTPS automático (Let's Encrypt) para o domínio definido em AASIS_DOMAIN.
+{$AASIS_DOMAIN} {
+	encode gzip
+	reverse_proxy aasis:8765 {
+		flush_interval -1             # sem buffer: o HUD usa eventos em tempo real (SSE)
+	}
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "no-referrer"
+		-Server
+	}
+}

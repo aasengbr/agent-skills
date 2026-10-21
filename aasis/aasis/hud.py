@@ -24,7 +24,7 @@ MAX_FAILS, FAIL_WINDOW = 10, 300  # tentativas inválidas por janela (segundos)
 class Hud:
     def __init__(self, port: int, on_ask, allowed_hosts=(), access_code: str = "", bind: str = "127.0.0.1",
                  trust_proxy: bool = False, google_auth=None, audit_fn=None, usage_fn=None, ack_fn=None,
-                 llm_status_fn=None, llm_test_fn=None, llm_models_fn=None):
+                 llm_status_fn=None, llm_test_fn=None, llm_models_fn=None, memory=None):
         """Modo local: token aleatório por sessão embutido na página. Modo remoto (access_code):
         o código é persistente, NÃO é embutido na página e o usuário o digita no celular."""
         self.port = port
@@ -36,6 +36,7 @@ class Hud:
         self.google_auth = google_auth
         self.ack_fn = ack_fn  # confirma lembrete entregue
         self.llm_status_fn, self.llm_test_fn, self.llm_models_fn = llm_status_fn, llm_test_fn, llm_models_fn
+        self.memory = memory  # Memory (usa .mem para a memória de longo prazo)
         self.audit_fn, self.usage_fn = audit_fn, usage_fn  # registro de ações e uso diário de tokens
         self.clients: list[queue.Queue] = []
         self.lock = threading.Lock()
@@ -147,6 +148,13 @@ class Hud:
                     except Exception as e:  # ex.: provedor sem chave ou fora do ar
                         data = {"error": f"{type(e).__name__}: {str(e)[:150]}"}
                     return self._send(200, json.dumps(data, ensure_ascii=False).encode(), "application/json; charset=utf-8")
+                if parts.path in ("/memory/list", "/memory/export"):
+                    if not hud.memory or not self._auth(query.get("token", [""])[0]):
+                        return self._send(403)
+                    m = hud.memory.mem
+                    data = {"active": m.list(limit=300), "pending": m.list(status="pending", limit=100)} \
+                        if parts.path == "/memory/list" else m.export()
+                    return self._send(200, json.dumps(data, ensure_ascii=False).encode(), "application/json; charset=utf-8")
                 if parts.path == "/audit":
                     if not hud.audit_fn or not self._auth(query.get("token", [""])[0]):
                         return self._send(403)
@@ -203,6 +211,26 @@ class Hud:
                     with hud.lock:
                         hud.clients.remove(q)
 
+            def _memory_post(self, body: dict):
+                m, action = hud.memory.mem, self.path.rsplit("/", 1)[-1]
+                try:
+                    if action == "park":  # 📍 Estacionei aqui: estado car_location (o novo substitui o antigo)
+                        lat, lon = float(body["lat"]), float(body["lon"])
+                        if not (-90 <= lat <= 90 and -180 <= lon <= 180):
+                            return self._send(400)
+                        acc = max(0.0, min(float(body.get("accuracy") or 0), 100000))
+                        note = " ".join(str(body.get("note", "")).split())[:120]
+                        text = (f"Carro estacionado em {lat:.5f},{lon:.5f} (precisão ±{acc:.0f} m)."
+                                + (f" Nota: {note}." if note else "")
+                                + f" Mapa: https://www.google.com/maps?q={lat:.5f},{lon:.5f}")
+                        rid = m.save("state", text, slot="car_location", level=1, importance=4)
+                        return self._send(200, json.dumps({"id": rid}).encode(), "application/json")
+                    rid = int(body["id"])
+                    ok = {"approve": m.approve, "reject": m.reject, "delete": lambda i: m.forget(i) > 0}[action](rid)
+                    return self._send(204 if ok else 404)
+                except (KeyError, TypeError, ValueError):
+                    return self._send(400)
+
             def do_POST(self):
                 if not self._auth(self.headers.get("X-Token", "")):
                     return self._send(403)
@@ -215,6 +243,8 @@ class Hud:
                     kw = {"deep": True} if body.get("deep") else {}  # modo profundo: modelo mais capaz, uma pergunta
                     threading.Thread(target=hud.on_ask, args=(str(body["text"]).strip(),), kwargs=kw, daemon=True).start()
                     return self._send(202)
+                if self.path.startswith("/memory/") and hud.memory:
+                    return self._memory_post(body)
                 if self.path == "/llm/test" and hud.llm_test_fn:
                     out = hud.llm_test_fn(str(body.get("alias", ""))[:40])
                     return self._send(200, json.dumps(out, ensure_ascii=False).encode(), "application/json; charset=utf-8")

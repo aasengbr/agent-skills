@@ -1,0 +1,45 @@
+# AASIS em VPS: o app fica numa rede interna e só o Caddy (HTTPS automático) escuta na internet.
+# Uso (na pasta deploy/vps, com o arquivo .env preenchido):  docker compose up -d --build
+services:
+  aasis:
+    build:
+      context: ../..                  # pasta aasis/ (onde está o Dockerfile)
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      AASIS_DATA_DIR: /data
+      AASIS_ALLOWED_HOSTS: ${AASIS_DOMAIN:?defina AASIS_DOMAIN no .env}
+    volumes:
+      - aasis-data:/data              # memória, token do Google, backups: sobrevive a atualizações e reinícios
+    expose:
+      - "8765"                        # só visível para o Caddy; NÃO é publicado na internet
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8765/healthz', timeout=3).status == 200 else 1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports:
+      - "80:80"                       # necessário para o certificado
+      - "443:443"
+    environment:
+      AASIS_DOMAIN: ${AASIS_DOMAIN:?defina AASIS_DOMAIN no .env}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data              # certificados: não apague, há limite de emissão
+      - caddy-config:/config
+    depends_on:
+      aasis:
+        condition: service_healthy
+
+volumes:
+  aasis-data:
+  caddy-data:
+  caddy-config:

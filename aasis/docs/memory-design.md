@@ -1,7 +1,7 @@
 # AASIS: cérebro e memória (estudo e projeto)
 
-Status: **proposta de projeto, nada disto está implementado**. Itens marcados com 🔎 foram verificados em fonte
-oficial ou no código; os demais são decisões de projeto ou estimativas minhas.
+Status: **Fases 0 e 1 implementadas** (ver seção 12). Fases 2 a 4 continuam só como projeto. Itens marcados com 🔎
+foram verificados em fonte oficial ou no código; os demais são decisões de projeto ou estimativas minhas.
 
 ## 1. Princípio
 
@@ -183,3 +183,34 @@ teto atual de 500 mil tokens/dia, ~80 turnos grandes bateriam no limite: **o tet
 
 **Aviso:** o AASIS ainda nunca rodou fora de testes simulados. Antes de confiar nele com saúde, o deploy real e a
 medição de entrega dos avisos são obrigatórios.
+
+## 12. O que foi implementado (Fases 0 e 1) e o que ficou de fora
+
+| Item do projeto | Situação |
+|---|---|
+| Ferramenta de esquecer (com confirmação que mostra o conteúdo) | Feito: `memory_forget` |
+| Auditoria sem conteúdo | Feito: ferramentas privadas registram só campos neutros (ids, datas), nunca texto |
+| Perfil sempre no prompt (a alergia não some mais) | Feito: testado com 200 fatos novos |
+| Tratar recusa (`refusal`) | Feito (o turno recusado não fica no histórico) |
+| Cache do prompt e esforço de raciocínio | Feito: prefixo estável com `cache_control`, hora e memórias depois; esforço por modelo |
+| Esquema tipado (perfil, fato, estado, evento, preferência), FTS5 sem acentos, ranking | Feito |
+| Estados que substituem o anterior mantendo histórico (carro, etc.) | Feito (`slot`) |
+| Pré-recuperação por pedido, filtrada pela confiança do provedor | Feito |
+| Aprender sozinho (uma chamada barata por frase pessoal, em segundo plano) | Feito: `Brain.learn` |
+| Confirmação para saúde, finanças e perfil | Feito (ferramenta e aprendizado automático: ficam **pendentes** até aprovar) |
+| Nada de e-mail, web ou notícia vira fato | Feito: turno "não confiável" grava só como pendente |
+| Bloqueio de senhas e cartões (Luhn) | Feito |
+| Tela Memória (ver, aprovar, apagar, exportar) e 📍 Estacionei aqui | Feito |
+| Migração dos fatos antigos | Feito (uma vez) |
+
+**Ficou de fora** (e continua só no projeto): consolidação noturna, criptografia de campo, backup no Drive, embeddings,
+`schedule`/`monitor` (remédios, contas), canal Telegram, streaming.
+
+**Limites conhecidos**
+- A busca é por palavra (com prefixo e uma lista pequena de sinônimos). "Onde moro?" **não** acha "Mora na rua X" porque
+  "moro" e "mora" não compartilham prefixo. Embeddings resolveriam; não estão feitos.
+- A classificação de sensibilidade é por palavras-chave. Passei a tratar verbos de medicação ("tomo") e unidades de
+  dose ("50 mg") como saúde, mas um nome de remédio sozinho ainda passa. Por isso o aprendizado automático **nunca**
+  usa provedor externo (piso "pessoal"), e a regra de conservadorismo gera falsos positivos ("tomo café").
+- Dados sensíveis **não estão criptografados em repouso**: ficam em texto no SQLite do servidor.
+- Nada disto rodou em Android real nem contra uma API real: os testes usam provedores simulados.

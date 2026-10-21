@@ -64,6 +64,19 @@ def test_classification_and_history_level():
     assert history_level([{"level": 0}, {"level": 2}, {"level": 1}]) == 2 and history_level([]) == 0
 
 
+@pytest.mark.parametrize("text", [
+    "Tomo Losartana 50 mg às 8h", "eu tomo Rivotril", "tenho diabetes", "minha pressão está alta", "tomar 2 comprimidos",
+    "gotas de 10 ml", "meu boleto vence amanhã", "qual o saldo da poupança", "imposto de renda irpf", "tenho depressão"])
+def test_classifier_catches_health_and_finance_without_the_word_remedio(text):
+    assert classify(text) == 2
+
+
+@pytest.mark.parametrize("text", ["como está o dólar", "previsão do tempo em Recife", "quem foi Santos Dumont",
+                                  "traduza bom dia para inglês", "explique a Selic"])
+def test_classifier_leaves_general_questions_normal(text):
+    assert classify(text) == 0
+
+
 def test_external_never_sees_private_levels_and_gets_filtered_context():
     with tempfile.TemporaryDirectory() as tmp:
         a, b = Prov("a", "trusted"), Prov("b", "external")

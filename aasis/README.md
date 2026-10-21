@@ -80,6 +80,20 @@ O AASIS roda num servidor online e você o usa pelo Chrome do celular. Passo a p
 
 Na nuvem, as ferramentas do PC (abrir apps, visão de tela, status do PC) ficam desligadas e as confirmações só vêm pelo HUD (sem HUD aberto, ações sensíveis são negadas). O endereço é **público na internet**: a única barreira é o código, por isso o servidor exige 20+ caracteres, aceita só os hosts configurados e bloqueia por IP depois de 10 erros em 5 min. Não reutilize esse código em outro lugar.
 
+## Memória (o coração do AASIS)
+Memória tipada que **aprende, lembra e esquece sob o seu controle**: perfil (alergias, contatos), fatos, **estados que
+mudam** (onde está o carro: o valor novo substitui o antigo e o histórico fica), eventos e preferências.
+- **Sempre disponível:** a cada pergunta o AASIS recupera o que é relevante e **o perfil nunca sai do contexto**.
+- **Aprende sozinho** com o que você afirma ("eu tenho um gato", "moro em Recife") e avisa ("Anotei: ..."). **Saúde,
+  finanças e perfil só entram com a sua aprovação** (aviso com Sim/Não e tela **🗂 Memória**).
+- **Segurança:** nada vindo de e-mail, web ou notícia vira fato sozinho (fica pendente); recusa senhas e cartões;
+  provedores externos nunca recebem memória pessoal; o registro de ações não guarda conteúdo.
+- **Você manda:** ver tudo, apagar (✕), exportar JSON, e dizer "esqueça X". **📍 Estacionei aqui** guarda o GPS + nota
+  (em garagem coberta o GPS erra: confie na nota).
+- Limites e o que falta (criptografia em repouso, backup, lembretes de remédio confiáveis): [`docs/memory-design.md`](docs/memory-design.md).
+- **Atenção:** os dados de saúde ficam em texto no banco do servidor e os trechos usados numa resposta vão à API da
+  Anthropic. **Não confie remédios ao AASIS** antes do deploy real, de um canal de aviso confiável e de medir a entrega.
+
 ## Orquestrador de IAs (vários modelos e provedores)
 Anthropic (Haiku, Sonnet, Opus) e, opcionalmente, DeepSeek, Kimi, GLM, NVIDIA, OpenRouter e modelos locais (Ollama),
 com roteamento por tarefa, troca automática se um falhar, limites por provedor e **regras de privacidade: provedores
@@ -109,6 +123,11 @@ O AASIS tem escopo aberto: responde sobre qualquer assunto e, para dados atuais,
 - **Histórico limitado** (`assistant.max_history_turns`, padrão 12 turnos): cada chamada reenvia só a conversa recente, sem separar uma ferramenta do seu resultado. Memória de longo prazo (`remember`) não é afetada.
 - **Registro de ações:** todo uso de ferramenta (ok, negado, erro) fica no banco e aparece no painel FERRAMENTAS, inclusive após reiniciar (últimas 1000). Guarda ferramenta, argumentos (até 300 caracteres) e status; **o resultado não é guardado**. Os argumentos podem conter trechos de rascunhos ou nomes que você ditou.
 - Se a API falhar (rede, chave, limite), o AASIS avisa e desfaz a pergunta pendente, sem deixar o painel preso em "pensando".
+
+## Opção C: VPS (sempre ligado, recomendado para uso diário)
+Servidor próprio 24 h com HTTPS automático (Caddy), firewall, backup diário do banco e instalação por `cloud-init`
+(colar no painel do provedor, sem terminal). É o caminho para o que não pode "dormir" (lembretes, avisos).
+Compose validado, **nunca executado num VPS real**. Guia, segurança, monitoramento e limites: [`docs/vps.md`](docs/vps.md).
 
 ## Segurança (decisões de projeto)
 - E-mails, agenda e páginas web chegam ao modelo dentro de tags `untrusted` e o prompt do sistema os trata como dado, nunca como instrução (defesa contra prompt injection). É mitigação, não garantia: por isso toda escrita (`gmail_draft`, `calendar_create`, `write_file`, `open_app`) exige sua confirmação.

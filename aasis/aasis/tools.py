@@ -14,7 +14,7 @@ from .home import SCHEMAS as HOME_SCHEMAS
 from .home import Home
 from .memory import Memory
 from .vision import Screen
-from .llm.privacy import SECRET, tool_level
+from .llm.privacy import SECRET, SENSITIVE, classify, tool_level
 from .world import World
 
 
@@ -31,6 +31,7 @@ class Tools:
         self.google = google or Google(cfg, data_dir())  # disponibilidade checada a cada uso (login pelo HUD)
         self.screen = screen or Screen(cfg)
         self.world = World(http or requests.Session(), self.tz)
+        self.untrusted_turn = False  # o Brain liga quando o turno leu e-mail, web, notícias... (memória vira pendente)
         self.web_search_disabled = False  # ligado pelo cérebro se a API recusar a busca (400)
         home = home or Home(cfg)
         self.home = home if home.available else None
@@ -128,12 +129,31 @@ class Tools:
             out += f", bateria {bat.percent:.0f}%"
         return out
 
-    def remember(self, text: str) -> str:
-        return f"Memorizado (id {self.memory.remember(text)})."
+    # ---------- memória de longo prazo (veja memstore.py) ----------
+    def _mem_rows(self, rows: list) -> str:
+        lines = [f"[{r['id']}] ({r['kind']}{', ' + r['slot'] if r['slot'] else ''}) {r['content']}" for r in rows]
+        return _wrap("memory", "\n".join(lines) or "Nada encontrado.")
 
-    def recall(self, query: str = "") -> str:
-        facts = self.memory.recall(query)
-        return "\n".join(facts) or "Nada encontrado."
+    def memory_save(self, content: str, kind: str = "fact", slot: str = "", importance: int = 3) -> str:
+        if self.untrusted_turn:  # veio de e-mail/web/notícia neste turno: só vale se o usuário aprovar
+            rid = self.memory.mem.save(kind, content, slot=slot or None, importance=importance, source="externo",
+                                       status="pending")
+            return f"Memória {rid} ficou PENDENTE (origem externa). Diga ao usuário para aprovar no painel Memória."
+        rid = self.memory.mem.save(kind, content, slot=slot or None, importance=importance)
+        return f"Memória {rid} guardada." if self.memory.mem.last_save_new else f"Já sabia disso (memória {rid})."
+
+    def memory_search(self, query: str) -> str:
+        return self._mem_rows(self.memory.mem.search(query, limit=10))
+
+    def memory_update(self, id: int, content: str) -> str:
+        return f"Memória atualizada (nova versão {self.memory.mem.update(int(id), content)})."
+
+    def memory_forget(self, id: int) -> str:
+        n = self.memory.mem.forget(int(id))
+        return f"Esquecido ({n} versão/versões apagada(s))." if n else "Memória não encontrada."
+
+    def memory_list(self, kind: str = "") -> str:
+        return self._mem_rows(self.memory.mem.list(kind, limit=40))
 
     def read_file(self, path: str) -> str:
         return self._safe_path(path).read_text(encoding="utf-8")[:8000]
@@ -209,8 +229,15 @@ class Tools:
         base = [
             tool("get_time", "Data e hora atuais."),
             tool("system_status", "Uso de CPU, RAM e bateria do PC."),
-            tool("remember", "Guarda um fato na memória de longo prazo.", {"text": s}, ["text"]),
-            tool("recall", "Busca fatos memorizados.", {"query": s}),
+            tool("memory_save", "Guarda na memória de longo prazo. kind: fact|profile|state|event|preference. Para "
+                 "estados que mudam (ex.: onde o carro está) use slot (ex.: car_location): o novo valor substitui o anterior. "
+                 "Só guarde o que o USUÁRIO disse; nunca senhas ou cartões.",
+                 {"content": s, "kind": s, "slot": s, "importance": i}, ["content"]),
+            tool("memory_search", "Busca na memória de longo prazo.", {"query": s}, ["query"]),
+            tool("memory_update", "Corrige uma memória pelo id (cria nova versão).", {"id": i, "content": s}, ["id", "content"]),
+            tool("memory_forget", "Apaga uma memória pelo id (e as versões antigas). Peça o id com memory_search.",
+                 {"id": i}, ["id"]),
+            tool("memory_list", "Lista o que está memorizado, opcionalmente por tipo.", {"kind": s}),
             tool("read_file", "Lê arquivo do workspace.", {"path": s}, ["path"]),
             tool("write_file", "Grava arquivo no workspace.", {"path": s, "content": s}, ["path", "content"]),
             tool("list_files", "Lista arquivos do workspace.", {"path": s}),
@@ -256,8 +283,18 @@ class Tools:
     def run(self, name: str, args: dict, confirm) -> str | list:
         out, status = self._run(name, args, confirm)
         note = out if status != "ok" and isinstance(out, str) else ""
-        self.memory.log_action(name, args, status, note)
+        self.memory.log_action(name, self._loggable(name, args), status, note)
         return out
+
+    # Argumentos que podem aparecer no registro de ações em ferramentas privadas (o resto vira "…").
+    LOGGABLE = {"id", "event_id", "message_id", "file_id", "days", "max_results", "domain", "service", "entity_id", "due",
+                "kind", "slot", "importance", "timezone", "show_done", "in_minutes", "when", "country", "max_items"}
+
+    def _loggable(self, name: str, args: dict) -> dict:
+        """Ferramentas públicas registram tudo; privadas registram só campos neutros (nunca texto de e-mail, saúde...)."""
+        if tool_level(name) == 0:
+            return args
+        return {k: (v if k in self.LOGGABLE else "…") for k, v in args.items()}
 
     def _run(self, name: str, args: dict, confirm) -> tuple[str | list, str]:
         if name not in {t["name"] for t in self.schemas()}:
@@ -270,6 +307,13 @@ class Tools:
                 label = f"{name}: {self.google.calendar_describe(args['event_id'])} | {args}"
             except Exception:
                 pass
+        if name in ("memory_save", "memory_update") and not (name == "memory_save" and self.untrusted_turn):
+            kind = args.get("kind", "fact")
+            if classify(str(args.get("content", ""))) >= SENSITIVE or kind == "profile":  # saúde/finanças/perfil: confirma
+                needs, label = True, f"Guardar na memória ({kind}, dado sensível): {args.get('content', '')}"
+        if name == "memory_forget":  # destrutivo: mostra o que será apagado, não só o id
+            row = self.memory.mem.get(int(args.get("id", 0) or 0)) if str(args.get("id", "")).lstrip("-").isdigit() else None
+            needs, label = True, f"Esquecer [{args.get('id')}]: {row['content'] if row else '(não encontrado)'}"
         if needs and not confirm(label):
             return "Ação negada pelo usuário.", "negado"
         try:
