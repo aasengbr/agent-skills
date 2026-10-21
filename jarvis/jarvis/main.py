@@ -6,7 +6,8 @@ import threading
 import webbrowser
 
 from .brain import Brain
-from .config import ROOT, load_config
+from .config import data_dir, load_config
+from .google_tools import WebAuth
 from .hud import Hud
 from .memory import Memory
 from .tools import Tools
@@ -18,14 +19,28 @@ def main() -> None:
     ap.add_argument("--port", type=int, default=8765, help="porta do HUD (127.0.0.1)")
     ap.add_argument("--allow-host", action="append", default=[], metavar="HOST",
                     help="acesso remoto (celular) via proxy HTTPS, ex.: meu-pc.tailnet.ts.net. Exige JARVIS_HUD_CODE")
+    ap.add_argument("--serve", action="store_true",
+                    help="modo nuvem: sem terminal, escuta em 0.0.0.0:$PORT, só HUD (celular). Exige JARVIS_HUD_CODE")
     args = ap.parse_args()
 
     cfg = load_config()  # carrega também o .env
     code = os.getenv("JARVIS_HUD_CODE", "")
-    if args.allow_host and len(code) < 12:
+    if args.serve:
+        # endpoint público na internet: código mais longo e hosts explícitos são obrigatórios
+        env_hosts = [h.strip() for h in os.getenv("JARVIS_ALLOWED_HOSTS", "").split(",") if h.strip()]
+        env_hosts += [os.environ[v] for v in ("RENDER_EXTERNAL_HOSTNAME", "RAILWAY_PUBLIC_DOMAIN") if os.getenv(v)]
+        args.allow_host = args.allow_host + env_hosts
+        if len(code) < 20:
+            sys.exit("Modo nuvem exige JARVIS_HUD_CODE com pelo menos 20 caracteres.")
+        if not args.allow_host:
+            sys.exit("Modo nuvem exige JARVIS_ALLOWED_HOSTS (ex.: meu-jarvis.onrender.com).")
+        args.text = True
+        cfg["runtime"] = {"cloud": True}
+        cfg["screen"] = {"enabled": False}
+    elif args.allow_host and len(code) < 12:
         sys.exit("Acesso remoto exige JARVIS_HUD_CODE com pelo menos 12 caracteres (defina no .env).")
     name, title = cfg["assistant"]["name"], cfg["assistant"]["user_title"]
-    memory = Memory(ROOT / "jarvis.db")
+    memory = Memory(data_dir() / "jarvis.db")
     tools = Tools(cfg, memory)
     voice = None
     hud: Hud | None = None
@@ -44,6 +59,8 @@ def main() -> None:
         emit("state", state="standby")
 
     def confirm(action: str) -> bool:
+        if args.serve:  # sem terminal: só o HUD pode autorizar; sem HUD aberto, nega
+            return hud.confirm(action) if hud and hud.has_clients() else False
         if voice:
             voice.speak(f"Confirma a ação solicitada, {title}?")
         if hud and hud.has_clients():
@@ -65,13 +82,23 @@ def main() -> None:
 
     if args.hud or args.allow_host:
         remote = bool(args.allow_host)
-        hud = Hud(args.port, handle, allowed_hosts=args.allow_host, access_code=code if remote else "")
+        if args.serve:
+            gcfg = cfg.get("google", {})
+            ga = WebAuth(data_dir() / gcfg.get("credentials_file", "credentials.json"),
+                         data_dir() / gcfg.get("token_file", "token.json"))
+            hud = Hud(int(os.getenv("PORT", args.port)), handle, allowed_hosts=args.allow_host, access_code=code,
+                      bind="0.0.0.0", trust_proxy=True, google_auth=ga)
+        else:
+            hud = Hud(args.port, handle, allowed_hosts=args.allow_host, access_code=code if remote else "")
         url = hud.start()
         print(f"HUD: {url}" + (f"  (remoto: {', '.join(args.allow_host)})" if remote else ""))
         if not remote:
             webbrowser.open(url)
 
     say(f"{name} online, {title}.")
+
+    if args.serve:
+        threading.Event().wait()  # servidor: fica de pé atendendo o HUD
 
     while True:
         try:

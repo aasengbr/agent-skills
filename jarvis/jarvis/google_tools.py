@@ -1,6 +1,10 @@
 """Gmail (leitura + rascunho) e Google Agenda. OAuth local; nada é enviado a terceiros além do Google."""
 import base64
 import datetime as dt
+import json
+import os
+import secrets
+import time
 from email.message import EmailMessage
 from pathlib import Path
 
@@ -13,21 +17,78 @@ SCOPES = [
 ]
 
 
-def authorize(credentials: Path, token: Path):
-    """Fluxo OAuth (abre o navegador na 1ª vez) e devolve as credenciais."""
+def load_creds(token: Path):
+    """Credenciais salvas, renovadas se preciso. Nunca abre navegador. None se não houver/inválidas."""
     from google.auth.transport.requests import Request
     from google.oauth2.credentials import Credentials
+
+    if not token.exists():
+        return None
+    creds = Credentials.from_authorized_user_file(str(token), SCOPES)
+    if not creds.has_scopes(SCOPES):  # token antigo sem os escopos atuais: reautoriza
+        return None
+    if creds.expired and creds.refresh_token:
+        creds.refresh(Request())
+        token.write_text(creds.to_json(), encoding="utf-8")
+    return creds if creds.valid else None
+
+
+def authorize(credentials: Path, token: Path):
+    """Fluxo OAuth local (abre o navegador na 1ª vez; só para uso no PC) e devolve as credenciais."""
     from google_auth_oauthlib.flow import InstalledAppFlow
 
-    creds = Credentials.from_authorized_user_file(str(token), SCOPES) if token.exists() else None
-    if creds and not creds.has_scopes(SCOPES):  # token antigo sem Drive: reautoriza
-        creds = None
-    if creds and creds.expired and creds.refresh_token:
-        creds.refresh(Request())
-    elif not creds or not creds.valid:
+    creds = load_creds(token)
+    if not creds:
         creds = InstalledAppFlow.from_client_secrets_file(str(credentials), SCOPES).run_local_server(port=0)
-    token.write_text(creds.to_json(), encoding="utf-8")
+        token.write_text(creds.to_json(), encoding="utf-8")
     return creds
+
+
+class WebAuth:
+    """Login Google pelo navegador (nuvem/celular). Credencial Web em GOOGLE_CLIENT_JSON ou credentials.json."""
+
+    TTL = 600
+
+    def __init__(self, credentials: Path, token: Path):
+        self.credentials, self.token = credentials, token
+        self._flows: dict[str, tuple[float, object]] = {}
+
+    def _config(self) -> dict | None:
+        raw = os.getenv("GOOGLE_CLIENT_JSON")
+        if raw:
+            return json.loads(raw)
+        return json.loads(self.credentials.read_text(encoding="utf-8")) if self.credentials.exists() else None
+
+    @property
+    def configured(self) -> bool:
+        return self._config() is not None
+
+    @property
+    def connected(self) -> bool:
+        try:
+            return load_creds(self.token) is not None
+        except Exception:
+            return False
+
+    def start(self, redirect_uri: str) -> str:
+        from google_auth_oauthlib.flow import Flow
+
+        flow = Flow.from_client_config(self._config(), SCOPES, redirect_uri=redirect_uri)
+        state = secrets.token_urlsafe(24)
+        url, _ = flow.authorization_url(access_type="offline", prompt="consent", state=state)
+        now = time.time()
+        self._flows = {k: v for k, v in self._flows.items() if now - v[0] < self.TTL}
+        self._flows[state] = (now, flow)
+        return url
+
+    def finish(self, state: str, code: str) -> bool:
+        """Uso único: o state só existe se um usuário autenticado iniciou o fluxo."""
+        item = self._flows.pop(state, None)
+        if not item or time.time() - item[0] > self.TTL:
+            return False
+        item[1].fetch_token(code=code)
+        self.token.write_text(item[1].credentials.to_json(), encoding="utf-8")
+        return True
 
 
 def _wrap(kind: str, text: str) -> str:
@@ -56,6 +117,7 @@ def _body_text(payload: dict) -> str:
 class Google:
     def __init__(self, cfg: dict, root: Path, services: dict | None = None):
         g = cfg.get("google", {})
+        self.cloud = bool(cfg.get("runtime", {}).get("cloud"))  # na nuvem nunca abre navegador no servidor
         self.tz = g.get("timezone", "America/Sao_Paulo")
         self.credentials = root / g.get("credentials_file", "credentials.json")
         self.token = root / g.get("token_file", "token.json")
@@ -63,13 +125,21 @@ class Google:
 
     @property
     def available(self) -> bool:
-        return bool(self._services) or self.credentials.exists() or self.token.exists()
+        if self._services:
+            return True
+        return self.token.exists() if self.cloud else (self.credentials.exists() or self.token.exists())
 
     def _svc(self, name: str, version: str):
         if name not in self._services:
             from googleapiclient.discovery import build
 
-            self._services[name] = build(name, version, credentials=authorize(self.credentials, self.token))
+            if self.cloud:
+                creds = load_creds(self.token)
+                if not creds:
+                    raise RuntimeError("Google não autorizado: use o botão 'Conectar Google' no HUD.")
+            else:
+                creds = authorize(self.credentials, self.token)
+            self._services[name] = build(name, version, credentials=creds)
         return self._services[name]
 
     # ---------- Gmail ----------

@@ -22,21 +22,28 @@ MAX_FAILS, FAIL_WINDOW = 10, 300  # tentativas inválidas por janela (segundos)
 
 
 class Hud:
-    def __init__(self, port: int, on_ask, allowed_hosts=(), access_code: str = ""):
+    def __init__(self, port: int, on_ask, allowed_hosts=(), access_code: str = "", bind: str = "127.0.0.1",
+                 trust_proxy: bool = False, google_auth=None):
         """Modo local: token aleatório por sessão embutido na página. Modo remoto (access_code):
         o código é persistente, NÃO é embutido na página e o usuário o digita no celular."""
         self.port = port
         self.on_ask = on_ask
         self.remote = bool(access_code)
         self.token = access_code or secrets.token_urlsafe(16)
-        self._fails: list[float] = []
+        self._fails: dict[str, list[float]] = {}  # tentativas inválidas por IP
+        self.trust_proxy = trust_proxy  # atrás de proxy da nuvem: IP real = último item de X-Forwarded-For
+        self.google_auth = google_auth
         self.clients: list[queue.Queue] = []
         self.lock = threading.Lock()
         self._answer = threading.Event()
         self._ok = False
-        self.httpd = ThreadingHTTPServer(("127.0.0.1", port), self._handler())
+        self.httpd = ThreadingHTTPServer((bind, port), self._handler())
         self.port = self.httpd.server_address[1]
         self.hosts = {f"127.0.0.1:{self.port}", f"localhost:{self.port}"} | {h.lower() for h in allowed_hosts}
+
+    def google_status(self) -> dict:
+        ga = self.google_auth
+        return {"available": bool(ga and ga.configured), "connected": bool(ga and ga.connected)}
 
     # ---------- API pública ----------
     def publish(self, type_: str, **data) -> None:
@@ -80,17 +87,38 @@ class Hud:
             def _host_ok(self) -> bool:  # bloqueia DNS rebinding
                 return self.headers.get("Host", "").lower() in hud.hosts
 
+            def _ip(self) -> str:
+                if hud.trust_proxy:
+                    fwd = self.headers.get("X-Forwarded-For", "")
+                    if fwd:
+                        return fwd.split(",")[-1].strip()  # último item: o que o proxy da plataforma acrescentou
+                return self.client_address[0]
+
             def _auth(self, token: str) -> bool:
                 if not self._host_ok():
                     return False
-                now = time.time()
-                hud._fails = [t for t in hud._fails if now - t < FAIL_WINDOW]
-                if len(hud._fails) >= MAX_FAILS:  # bloqueio temporário contra força bruta
+                now, ip = time.time(), self._ip()
+                if len(hud._fails) > 5000:
+                    hud._fails.clear()
+                recent = [t for t in hud._fails.get(ip, []) if now - t < FAIL_WINDOW]
+                hud._fails[ip] = recent
+                if len(recent) >= MAX_FAILS:  # bloqueio temporário só daquele IP (não derruba o dono)
                     return False
                 ok = secrets.compare_digest((token or "").encode(), hud.token.encode())
                 if not ok:
-                    hud._fails.append(now)
+                    recent.append(now)
                 return ok
+
+            def _redirect(self, where: str):
+                self.send_response(302)
+                self.send_header("Location", where)
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+
+            def _redirect_uri(self) -> str:
+                host = self.headers.get("Host", "")
+                scheme = "http" if host.startswith(("127.0.0.1", "localhost")) else "https"
+                return f"{scheme}://{host}/google/callback"
 
             def _send(self, code: int, body: bytes = b"", ctype: str = "text/plain"):
                 self.send_response(code)
@@ -100,8 +128,28 @@ class Hud:
                 self.wfile.write(body)
 
             def do_GET(self):
+                parts = urllib.parse.urlsplit(self.path)
+                query = urllib.parse.parse_qs(parts.query)
+                if parts.path == "/healthz":  # checagem de saúde da plataforma; não revela nada
+                    return self._send(200, b"ok")
                 if not self._host_ok():
                     return self._send(403)
+                if parts.path == "/google/start":
+                    ga = hud.google_auth
+                    if not (ga and ga.configured) or not self._auth(query.get("token", [""])[0]):
+                        return self._send(403)
+                    return self._redirect(ga.start(self._redirect_uri()))
+                if parts.path == "/google/callback":
+                    ga = hud.google_auth
+                    try:
+                        ok = bool(ga) and "error" not in query and ga.finish(
+                            query.get("state", [""])[0], query.get("code", [""])[0])
+                    except Exception:
+                        ok = False
+                    if not ok:
+                        return self._send(400, "Falha na autorização do Google. Tente de novo pelo HUD.".encode())
+                    hud.publish("google", **hud.google_status())
+                    return self._redirect("/")
                 if self.path in STATIC:
                     return self._send(200, (HUD_DIR / self.path[1:]).read_bytes(), STATIC[self.path])
                 if self.path == "/":
@@ -115,6 +163,7 @@ class Hud:
 
             def _stream(self):
                 q: queue.Queue = queue.Queue()
+                q.put(json.dumps({"type": "google", **hud.google_status()}))
                 with hud.lock:
                     hud.clients.append(q)
                 self.send_response(200)

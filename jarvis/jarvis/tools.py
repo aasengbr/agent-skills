@@ -6,7 +6,7 @@ from pathlib import Path
 import psutil
 import requests
 
-from .config import ROOT
+from .config import data_dir
 from .google_tools import SCHEMAS as GOOGLE_SCHEMAS
 from .google_tools import Google
 from .home import SCHEMAS as HOME_SCHEMAS
@@ -23,8 +23,8 @@ class Tools:
         self.workspace = Path(cfg["safety"]["workspace"])
         self.apps = {k.lower(): v for k, v in cfg["safety"]["apps"].items()}
         self.confirm_tools = set(cfg["safety"]["confirm_tools"])
-        google = google or Google(cfg, ROOT)
-        self.google = google if google.available else None
+        self.cloud = bool(cfg.get("runtime", {}).get("cloud"))  # na nuvem: sem ferramentas do PC
+        self.google = google or Google(cfg, data_dir())  # disponibilidade checada a cada uso (login pelo HUD)
         self.screen = screen or Screen(cfg)
         home = home or Home(cfg)
         self.home = home if home.available else None
@@ -110,12 +110,14 @@ class Tools:
             tool("open_app", "Abre um aplicativo permitido.", {"name": s}, ["name"]),
             tool("web_fetch", "Baixa o texto de uma URL http(s).", {"url": s}, ["url"]),
         ]
-        if self.screen.enabled:
+        if self.cloud:
+            base = [t for t in base if t["name"] not in {"open_app", "system_status"}]
+        if self.screen.enabled and not self.cloud:
             base.append(tool("screen_look", "Captura e analisa a tela do usuário (somente visão)."))
         if self.home:
             for name, desc, props, req in HOME_SCHEMAS:
                 base.append(tool(name, desc, props, req))
-        if self.google:
+        if self.google.available:
             for name, desc, props, req in GOOGLE_SCHEMAS:
                 base.append(tool(name, desc, {k: {"type": v} for k, v in props.items()}, req))
         return base

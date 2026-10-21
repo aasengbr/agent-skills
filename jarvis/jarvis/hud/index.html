@@ -47,6 +47,7 @@
   CPU <span id="cpuv">--</span>%<div class="bar"><i id="cpu"></i></div>
   RAM <span id="ramv">--</span>%<div class="bar"><i id="ram"></i></div>
   <h2>LINK</h2><span id="link">OFFLINE</span>
+  <div id="gbox" style="display:none;margin-top:12px"><h2>GOOGLE</h2><span id="gst"></span> <button type="button" id="gbtn" style="min-height:32px;padding:0 10px">CONECTAR</button></div>
 </div>
 <div class="panel" id="center"><canvas id="reactor" width="600" height="600"></canvas><div id="status">STANDBY</div></div>
 <div class="panel"><h2>FERRAMENTAS</h2><div id="log"></div></div>
@@ -86,6 +87,8 @@ function onMsg(e) {
   else if (m.type === "tool") addTool(m.name, m.args, m.result);
   else if (m.type === "stats") { $("cpu").style.width = m.cpu + "%"; $("ram").style.width = m.ram + "%";
     $("cpuv").textContent = Math.round(m.cpu); $("ramv").textContent = Math.round(m.ram); }
+  else if (m.type === "google") { $("gbox").style.display = m.available ? "block" : "none";
+    $("gst").textContent = m.connected ? "conectado" : "desconectado"; $("gbtn").style.display = m.connected ? "none" : "inline"; }
   else if (m.type === "confirm") { $("act").textContent = m.action; $("modal").classList.add("on"); }
 }
 function connect() {
@@ -100,6 +103,7 @@ function connect() {
       TOKEN = ""; $("lerr").textContent = "Código inválido ou bloqueado."; $("login").classList.add("on"); }
   };
 }
+$("gbtn").onclick = () => { location.href = "/google/start?token=" + encodeURIComponent(TOKEN); };
 $("lf").onsubmit = ev => { ev.preventDefault(); TOKEN = $("code").value;
   try { localStorage.setItem("jarvis_code", TOKEN); } catch (e) {} $("lerr").textContent = ""; connect(); };
 

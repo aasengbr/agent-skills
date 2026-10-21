@@ -9,7 +9,7 @@ Assistente falado que responde, lembra de fatos, lê/grava arquivos num workspac
 Testar sem voz (qualquer SO):
 ```
 pip install -r requirements.txt
-copy .env.example .env      # preencha ANTHROPIC_API_KEY
+copy env.example .env      # preencha ANTHROPIC_API_KEY
 python -m jarvis.main --text
 ```
 Com voz (Windows, 16 GB RAM, sem GPU: Whisper `small` em CPU/int8):
@@ -51,7 +51,7 @@ Ferramentas: `ha_list`, `ha_state`, `ha_call`. Aparecem só com `HA_TOKEN` no `.
 
 Faixas de risco (`config.yaml`): `auto_domains` (luz, interruptor, ventilador, mídia, cena) executam direto; `confirm_domains` (clima, persiana, aspirador) pedem confirmação; **qualquer outro domínio (fechaduras, alarme, scripts, automações, câmeras) é bloqueado e nem aparece para o modelo.** Em `ha_call` o `entity_id` precisa pertencer ao domínio informado, o serviço é validado por regex, e `entity_id`/`area_id`/`device_id` dentro de `data` são descartados.
 
-## Android / celular (PWA)
+## Android / celular (PWA) — Opção A: com um PC ligado (Tailscale)
 O JARVIS continua rodando no PC; o celular é o controle remoto (HUD instalável, microfone e voz do Chrome). Sem app nativo, sem abrir portas na internet.
 
 1. Instale o [Tailscale](https://tailscale.com/) no PC e no celular (mesma conta) e ative **HTTPS/MagicDNS** no painel admin. O HTTPS é obrigatório: o Chrome só libera o microfone em conexão segura.
@@ -61,6 +61,22 @@ O JARVIS continua rodando no PC; o celular é o controle remoto (HUD instalável
 5. 🎤 fala o comando (push-to-talk; não há wake word no navegador), 🔊 lê as respostas em voz alta. As confirmações aparecem como janela no celular.
 
 Segurança do modo remoto: o servidor continua em `127.0.0.1` (o Tailscale faz a ponte, nada fica exposto na rede local); só os hosts de `--allow-host` são aceitos; o código **não vai embutido na página** (fica só no aparelho); 10 tentativas erradas em 5 min bloqueiam por 5 min; o programa se recusa a subir em modo remoto com código curto. Privacidade: o reconhecimento de voz do Chrome Android envia o áudio ao Google; se não quiser, digite os comandos. Quem tiver o código controla as ferramentas do PC (inclusive ler e-mail e Drive), então trate-o como senha.
+
+## Opção B: sem PC (nuvem, tudo pelo celular)
+O JARVIS roda num servidor online e você o usa pelo Chrome do celular. Passo a passo (feito no navegador do celular; exemplo com a [Render](https://render.com), serviços equivalentes funcionam com o `Dockerfile`):
+
+1. Crie uma chave em [console.anthropic.com](https://console.anthropic.com) (API Keys).
+2. Na Render: **New → Web Service** → conecte o GitHub → repositório `agent-skills`, branch `claude/jarvis-iron-man-assistant-ho9xxs` (ou `main` depois do merge). **Root Directory: `jarvis`**, **Language: Docker**, **Health Check Path: `/healthz`**.
+3. Em **Environment**, crie:
+   - `ANTHROPIC_API_KEY` = a chave do passo 1
+   - `JARVIS_HUD_CODE` = frase longa, **20+ caracteres** (é a sua senha do JARVIS)
+   - `JARVIS_ALLOWED_HOSTS` = o host do serviço, ex.: `meu-jarvis.onrender.com` (sem `https://`)
+4. **Disco persistente** (planos pagos): adicione um disco montado em `/data`. Sem ele, a memória e a conexão com o Google se perdem a cada reinício (e planos gratuitos costumam "dormir" quando ociosos).
+5. Abra o endereço no Chrome, digite o código e use ⋮ → **Adicionar à tela inicial**.
+6. **E-mail, agenda e Drive:** no Google Cloud Console, crie uma credencial **Aplicativo da Web** com URI de redirecionamento `https://SEU-HOST/google/callback`, ative as APIs (Gmail, Calendar, Drive), copie o JSON para a variável `GOOGLE_CLIENT_JSON` e reinicie. No HUD, painel **GOOGLE → CONECTAR**. Atenção: apps Google em modo *Teste* têm o login expirado a cada ~7 dias; é preciso reconectar.
+7. **Casa inteligente:** exige um Home Assistant acessível pela internet (ex.: Nabu Casa). Defina `HA_URL` e `HA_TOKEN`.
+
+Na nuvem, as ferramentas do PC (abrir apps, visão de tela, status do PC) ficam desligadas e as confirmações só vêm pelo HUD (sem HUD aberto, ações sensíveis são negadas). O endereço é **público na internet**: a única barreira é o código, por isso o servidor exige 20+ caracteres, aceita só os hosts configurados e bloqueia por IP depois de 10 erros em 5 min. Não reutilize esse código em outro lugar.
 
 ## Segurança (decisões de projeto)
 - E-mails, agenda e páginas web chegam ao modelo dentro de tags `untrusted` e o prompt do sistema os trata como dado, nunca como instrução (defesa contra prompt injection). É mitigação, não garantia: por isso toda escrita (`gmail_draft`, `calendar_create`, `write_file`, `open_app`) exige sua confirmação.
@@ -80,6 +96,7 @@ Segurança do modo remoto: o servidor continua em `127.0.0.1` (o Tailscale faz a
 | Visão de tela | Implementada e testada com captura simulada (confirmação, redução, aviso de dado não confiável). **Captura real (`mss`) não testada** em Windows |
 | Casa inteligente | Implementada e testada com Home Assistant simulado (faixas de risco, bloqueios, confirmação). **Não testada contra um Home Assistant real** |
 | Controle de mouse/teclado | **Não implementado** (decisão deliberada: maior risco) |
+| Nuvem (Docker, login Google pelo navegador) | Implementada; servidor, bloqueio por IP, OAuth (com Google simulado) e inicialização em ambiente limpo testados. **A imagem Docker não foi construída** (sem Docker daemon no ambiente de build) e **nada foi implantado de fato** |
 | Android (PWA via Tailscale) | Implementado; servidor, login, bloqueio e layout testados no Chromium (emulação de celular). **Não testado em Android real, nem com Tailscale real, nem o microfone do Chrome** |
 | Interface HUD estilo Iron Man | Implementado e testado (`pytest`, renderização no Chromium sem erros de JS). Não verificado em Windows/Edge |
 
