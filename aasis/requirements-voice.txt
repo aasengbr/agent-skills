@@ -1,0 +1,6 @@
+-r requirements.txt
+faster-whisper>=1.0
+sounddevice>=0.4
+numpy>=1.26
+openwakeword>=0.6
+pyttsx3>=2.90

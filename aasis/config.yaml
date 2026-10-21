@@ -1,0 +1,57 @@
+assistant:
+  name: AASIS
+  user_title: senhor        # como o assistente te chama
+  language: pt-BR
+  timezone: America/Sao_Paulo   # datas, lembretes e virada do teto diário (o servidor na nuvem roda em UTC)
+  model: claude-sonnet-5-5  # cérebro (nuvem)
+  max_tokens: 1024
+  max_tool_rounds: 6
+  max_history_turns: 12     # turnos de conversa enviados a cada chamada (controla custo)
+
+voice:
+  wake_word: hey_jarvis     # modelo openWakeWord
+  wake_threshold: 0.5
+  stt_model: small          # faster-whisper: tiny | base | small (CPU, 16GB RAM)
+  stt_compute_type: int8
+  silence_seconds: 1.2      # fim da frase
+  max_record_seconds: 15
+  tts_rate: 185
+
+safety:
+  # Pastas que o AASIS pode ler/escrever. Tudo fora disso é bloqueado.
+  workspace: "~/aasis-workspace"
+  # Apps que podem ser abertos (nome amigável -> comando do Windows)
+  apps:
+    navegador: "start msedge"
+    chrome: "start chrome"
+    bloco de notas: "notepad"
+    calculadora: "calc"
+    explorador: "explorer"
+    vscode: "code"
+  # Ferramentas que exigem confirmação verbal/escrita antes de executar
+  confirm_tools:
+    - write_file
+    - open_app
+    - gmail_draft
+    - calendar_create
+    - drive_create_doc
+    - screen_look      # a imagem da tela sai do PC para a API
+
+google:                     # E-mail e Agenda (veja README: credentials.json)
+  timezone: America/Sao_Paulo
+  credentials_file: credentials.json
+  token_file: token.json
+
+screen:                     # visão de tela (somente leitura)
+  enabled: true
+  monitor: 1                # 1 = principal, 0 = todos
+  max_side: 1568            # redimensiona a captura antes de enviar
+
+home_assistant:             # casa inteligente (defina HA_TOKEN no .env)
+  url: http://homeassistant.local:8123
+  auto_domains: [light, switch, fan, media_player, scene]   # executa direto
+  confirm_domains: [climate, cover, vacuum]                  # pede confirmação
+  # lock, alarm_control_panel, script, automation, camera etc. ficam bloqueados e invisíveis
+
+budget:                     # teto diário de uso da API (soma de tokens de entrada e saída; 0 = sem limite)
+  daily_tokens: 500000      # valor estimado: ajuste olhando o seu consumo real no console da Anthropic
