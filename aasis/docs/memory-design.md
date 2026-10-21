@@ -207,10 +207,40 @@ medição de entrega dos avisos são obrigatórios.
 `schedule`/`monitor` (remédios, contas), canal Telegram, streaming.
 
 **Limites conhecidos**
-- A busca é por palavra (com prefixo e uma lista pequena de sinônimos). "Onde moro?" **não** acha "Mora na rua X" porque
-  "moro" e "mora" não compartilham prefixo. Embeddings resolveriam; não estão feitos.
+- A busca é por palavra (prefixo, variação de verbo, famílias de palavras e uma lista pequena de sinônimos). Lacunas de
+  **sentido** ("profissão" × "engenheiro", "convênio" × "plano de saúde") só se resolvem por palavras-chave gravadas junto
+  com a memória (escolhidas pelo modelo), por contexto completo (memória pequena) ou por embeddings (não feitos).
 - A classificação de sensibilidade é por palavras-chave. Passei a tratar verbos de medicação ("tomo") e unidades de
   dose ("50 mg") como saúde, mas um nome de remédio sozinho ainda passa. Por isso o aprendizado automático **nunca**
   usa provedor externo (piso "pessoal"), e a regra de conservadorismo gera falsos positivos ("tomo café").
 - Dados sensíveis **não estão criptografados em repouso**: ficam em texto no SQLite do servidor.
 - Nada disto rodou em Android real nem contra uma API real: os testes usam provedores simulados.
+
+## 13. Avaliação medida da memória (`python tests/memory_eval.py`)
+
+**Limites desta avaliação:** o conjunto foi escrito **por mim**, o mesmo autor do código, em português do dia a dia:
+35 perguntas originais + 30 "separadas" escritas depois do ajuste (a primeira rodada ficou viciada: eu ajustei a busca
+olhando as perguntas que falhavam). Não é corpus de usuário real, e **não mede o modelo de linguagem**: a qualidade de
+`keywords`, `about` e da extração automática depende do modelo e **não foi medida**.
+
+| Cenário | Antes | Depois |
+|---|---|---|
+| Perguntas originais, 67 memórias | 89% | **100%** (viciado: ajustado nelas) |
+| **Perguntas separadas**, 67 memórias | 84% | **100%** (contexto completo, trivial) |
+| Perguntas originais, ~600 memórias parecidas | 91% | **100%** |
+| **Perguntas separadas**, ~600 memórias parecidas | 77% | **87%** (13% restante: lacunas de sentido) |
+| Portão de aprendizado (frases duradouras reconhecidas) | 75% | **100%** (2 de 12 frases inúteis passam; o modelo de extração as descarta) |
+
+- **Perguntas por palavra:** 100% nos dois cenários. **Perguntas de sentido:** 67% antes; com memória pequena o modelo vê
+  tudo, e com memória grande ficam as lacunas.
+- **Robustez:** resultado igual com 5 sementes de distratores. Se o modelo **rotular errado** o "sobre quem" em 30% a 100%
+  dos itens de terceiros, cai para ~91% (originais) e ~77–79% (separadas): **não fica pior que sem a melhoria**.
+- **O que mudou:** variações de verbo e famílias de palavras (moro/mora, torço/torce); `keywords` e `about`
+  (sobre quem) gravados com a memória; ranking que prefere memórias do próprio usuário em perguntas em primeira pessoa
+  e a pessoa citada em perguntas sobre ela; contexto **completo** quando a memória cabe em ~6 mil caracteres (~2 mil
+  tokens); **corte de candidatos de 60 para 500** (o corte escondia a memória certa antes de reordenar); portão de
+  aprendizado por exclusão (perguntas, comandos, saudações) em vez de exigir "meu/minha/eu".
+- **Erros meus corrigidos no caminho:** gabarito errado ("sogra" × "mãe"), ajuste viciado no primeiro conjunto e o corte
+  em 60 candidatos.
+- **Custo do contexto completo:** ~2 mil tokens por pergunta com a memória cheia (cerca de US$ 0,004 a cada pedido no
+  Sonnet, segundo o preço de entrada da documentação). Acima do limite, volta ao modo busca.

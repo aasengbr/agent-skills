@@ -90,6 +90,8 @@ mudam** (onde está o carro: o valor novo substitui o antigo e o histórico fica
   provedores externos nunca recebem memória pessoal; o registro de ações não guarda conteúdo.
 - **Você manda:** ver tudo, apagar (✕), exportar JSON, e dizer "esqueça X". **📍 Estacionei aqui** guarda o GPS + nota
   (em garagem coberta o GPS erra: confie na nota).
+- **Medido:** acerta 100% das perguntas por palavra e ~87% das perguntas novas com ~600 memórias parecidas; memória
+  pequena vai inteira ao modelo. Avaliação, limites e como repetir: [`docs/memory-design.md`](docs/memory-design.md) seção 13.
 - Limites e o que falta (criptografia em repouso, backup, lembretes de remédio confiáveis): [`docs/memory-design.md`](docs/memory-design.md).
 - **Atenção:** os dados de saúde ficam em texto no banco do servidor e os trechos usados numa resposta vão à API da
   Anthropic. **Não confie remédios ao AASIS** antes do deploy real, de um canal de aviso confiável e de medir a entrega.
@@ -123,6 +125,9 @@ O AASIS tem escopo aberto: responde sobre qualquer assunto e, para dados atuais,
 - **Histórico limitado** (`assistant.max_history_turns`, padrão 12 turnos): cada chamada reenvia só a conversa recente, sem separar uma ferramenta do seu resultado. Memória de longo prazo (`remember`) não é afetada.
 - **Registro de ações:** todo uso de ferramenta (ok, negado, erro) fica no banco e aparece no painel FERRAMENTAS, inclusive após reiniciar (últimas 1000). Guarda ferramenta, argumentos (até 300 caracteres) e status; **o resultado não é guardado**. Os argumentos podem conter trechos de rascunhos ou nomes que você ditou.
 - Se a API falhar (rede, chave, limite), o AASIS avisa e desfaz a pergunta pendente, sem deixar o painel preso em "pensando".
+
+## Notebook (Windows)
+Para testar hoje, sem hospedagem: [`docs/notebook.md`](docs/notebook.md). Não serve para lembretes críticos (o notebook dorme). Os testes rodam em Windows no CI do GitHub.
 
 ## Opção C: VPS (sempre ligado, recomendado para uso diário)
 Servidor próprio 24 h com HTTPS automático (Caddy), firewall, backup diário do banco e instalação por `cloud-init`
