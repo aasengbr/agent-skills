@@ -16,7 +16,8 @@ def data_dir() -> Path:
 
 def load_config(path: Path | None = None) -> dict:
     load_dotenv(ROOT / ".env")
-    cfg = yaml.safe_load((path or ROOT / "config.yaml").read_text(encoding="utf-8"))
+    path = path or Path(os.getenv("AASIS_CONFIG") or ROOT / "config.yaml")  # config própria sem editar o repositório
+    cfg = yaml.safe_load(path.read_text(encoding="utf-8"))
     if os.getenv("AASIS_MODEL"):
         cfg["assistant"]["model"] = os.environ["AASIS_MODEL"]
     configured = os.getenv("AASIS_DATA_DIR")
