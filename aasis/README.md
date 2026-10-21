@@ -124,6 +124,11 @@ O AASIS tem escopo aberto: responde sobre qualquer assunto e, para dados atuais,
 - **Registro de ações:** todo uso de ferramenta (ok, negado, erro) fica no banco e aparece no painel FERRAMENTAS, inclusive após reiniciar (últimas 1000). Guarda ferramenta, argumentos (até 300 caracteres) e status; **o resultado não é guardado**. Os argumentos podem conter trechos de rascunhos ou nomes que você ditou.
 - Se a API falhar (rede, chave, limite), o AASIS avisa e desfaz a pergunta pendente, sem deixar o painel preso em "pensando".
 
+## Opção C: VPS (sempre ligado, recomendado para uso diário)
+Servidor próprio 24 h com HTTPS automático (Caddy), firewall, backup diário do banco e instalação por `cloud-init`
+(colar no painel do provedor, sem terminal). É o caminho para o que não pode "dormir" (lembretes, avisos).
+Compose validado, **nunca executado num VPS real**. Guia, segurança, monitoramento e limites: [`docs/vps.md`](docs/vps.md).
+
 ## Segurança (decisões de projeto)
 - E-mails, agenda e páginas web chegam ao modelo dentro de tags `untrusted` e o prompt do sistema os trata como dado, nunca como instrução (defesa contra prompt injection). É mitigação, não garantia: por isso toda escrita (`gmail_draft`, `calendar_create`, `write_file`, `open_app`) exige sua confirmação.
 - Arquivos: só dentro de `safety.workspace` (bloqueia `../`).

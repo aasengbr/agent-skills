@@ -6,6 +6,7 @@ import threading
 import webbrowser
 from zoneinfo import ZoneInfo
 
+from .backup import start_backup_loop
 from .brain import Brain
 from .config import data_dir, load_config
 from .google_tools import WebAuth
@@ -121,6 +122,9 @@ def main() -> None:
             if voice:
                 voice.speak(f"Lembrete, {title}: {r['text']}")
             memory.ack_reminder(r["id"])
+
+    if args.serve and cfg.get("backup", {}).get("enabled", True):  # cópia diária do banco em /data/backups
+        start_backup_loop(data_dir() / "aasis.db", data_dir() / "backups", int(cfg.get("backup", {}).get("keep", 14)))
 
     # na nuvem só entrega com um HUD aberto (senão o lembrete se perderia); fora dela, sempre
     Scheduler(memory, deliver, ready=(lambda: hud.has_clients()) if args.serve else (lambda: True)).start()

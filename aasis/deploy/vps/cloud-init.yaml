@@ -1,0 +1,27 @@
+#cloud-config
+# Cole este conteúdo no campo "User data" / "cloud-init" ao CRIAR o VPS (Ubuntu 24.04). Sem terminal.
+# ANTES de colar, troque todos os <PREENCHA>. ATENÇÃO: o provedor guarda o user-data; se não quiser segredos ali,
+# deixe as chaves em branco e preencha depois em /opt/aasis/aasis/deploy/vps/.env (veja docs/vps.md).
+package_update: true
+package_upgrade: true
+packages: [docker.io, docker-compose-v2, git, ufw, fail2ban, unattended-upgrades]
+write_files:
+  - path: /root/aasis.env
+    permissions: "0600"
+    content: |
+      AASIS_DOMAIN=<PREENCHA: aasis.seudominio.com>
+      ANTHROPIC_API_KEY=<PREENCHA>
+      AASIS_HUD_CODE=<PREENCHA: frase longa, 20+ caracteres>
+runcmd:
+  - ufw default deny incoming
+  - ufw default allow outgoing
+  - ufw allow 22/tcp
+  - ufw allow 80/tcp
+  - ufw allow 443/tcp
+  - ufw --force enable
+  - systemctl enable --now docker fail2ban
+  # Repositório privado? Use uma URL com token (https://TOKEN@github.com/aasengbr/agent-skills.git) ou clone depois.
+  - git clone --branch claude/jarvis-iron-man-assistant-ho9xxs https://github.com/aasengbr/agent-skills.git /opt/aasis
+  - cp /root/aasis.env /opt/aasis/aasis/deploy/vps/.env
+  - chmod 600 /opt/aasis/aasis/deploy/vps/.env
+  - cd /opt/aasis/aasis/deploy/vps && docker compose up -d --build
