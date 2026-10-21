@@ -17,6 +17,27 @@ estar de pé a qualquer hora (lembretes de remédio, avisos, Telegram). **Nada a
 
 Mudar de um para o outro é simples: a memória é um arquivo (`aasis.db`) e há backup diário.
 
+## Qual provedor escolher
+
+**Nunca testei nenhum provedor.** As fontes abaixo são comparativos de blogs, **muitos de empresas que vendem VPS e se
+colocam em primeiro lugar**; trate como indício e **confira o preço no site do provedor** (promoções anuais sobem na
+renovação). Critérios que importam para o AASIS: Ubuntu 24.04; campo **user-data/cloud-init** (para a instalação sem
+terminal); **snapshots**; **2 GB de RAM** (a construção da imagem Docker em 1 GB pode faltar memória, não testei);
+cobrança por hora ou mensal sem fidelidade.
+
+| Opção | O que as fontes dizem | Observação |
+|---|---|---|
+| **Vultr** (datacenter em São Paulo) | A partir de cerca de US$ 5 a 6/mês; plano de ~US$ 10 com 2 GB ([fonte](https://deployhandbook.com/best/cheap-vps-hosting)); cobrança por hora | Cobra em dólar (cartão internacional, com IOF). Cloud-init: conheço o suporte, **não verifiquei** |
+| **Hetzner** | Melhor custo-benefício nos comparativos (cerca de € 4,5 por 2 vCPU/2 GB) ([fonte](https://dev.to/stargazermedia/what-are-cheapest-cloud-servers-out-there-in-2025-comparison-377a)) | Pelo que conheço **sem datacenter no Brasil** (não confirmado nas fontes): mais latência, irrelevante para um assistente |
+| **Hostinger / Serverspace** (Brasil, em reais) | Entrada a partir de ~R$ 24 a 30/mês ([fonte](https://serverspace.com.br/about/blog/melhores-vps-brasil-2026/), [fonte](https://guiadohost.com/2026/05/12/vps-barato-no-brasil-2026-compare-6-planos-de-entrada-e-descubra-o-melhor-custo-beneficio/)) | Pagamento em reais; **não sei se têm cloud-init**: use a instalação por SSH (opção B) |
+| **Oracle Cloud "Always Free"** | A documentação oficial diz que instâncias gratuitas **podem ser recuperadas se ficarem ociosas** (CPU abaixo de 20% por 7 dias) ([doc](https://docs.oracle.com/en-us/iaas/Content/FreeTier/resourceref.htm)) | **Não use para o AASIS**: ele fica ocioso quase sempre, o pior caso para esse risco |
+| AWS Lightsail, DigitalOcean | Mais caros pelo mesmo plano, segundo as fontes | Sem vantagem clara aqui |
+
+**Recomendação:** comece por um provedor **cobrado por hora** (ex.: Vultr em São Paulo, plano de 2 GB) e rode uma
+semana: se o AASIS e o monitor se comportarem bem, fica; se não, apaga e perde centavos. Troca de provedor é fácil
+porque a memória é um arquivo com backup. Se você **só consegue pagar em reais (Pix/boleto)**, use um provedor brasileiro
+com instalação por SSH.
+
 ## O que este pacote faz
 
 - **`deploy/vps/docker-compose.yml`:** sobe o AASIS e o **Caddy** (HTTPS automático com Let's Encrypt). O AASIS fica
