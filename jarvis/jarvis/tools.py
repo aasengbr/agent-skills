@@ -123,14 +123,20 @@ class Tools:
         return base
 
     def run(self, name: str, args: dict, confirm) -> str | list:
+        out, status = self._run(name, args, confirm)
+        note = out if status != "ok" and isinstance(out, str) else ""
+        self.memory.log_action(name, args, status, note)
+        return out
+
+    def _run(self, name: str, args: dict, confirm) -> tuple[str | list, str]:
         if name not in {t["name"] for t in self.schemas()}:
-            return f"Ferramenta desconhecida: {name}"
+            return f"Ferramenta desconhecida: {name}", "desconhecida"
         fn = getattr(self, name, None) or getattr(self.google, name, None) or getattr(self.home, name)
         needs = name in self.confirm_tools or (name == "ha_call" and self.home.needs_confirm(args))
         if needs and not confirm(f"{name} {args}"):
-            return "Ação negada pelo usuário."
+            return "Ação negada pelo usuário.", "negado"
         try:
             out = fn(**args)
-            return out if isinstance(out, list) else str(out)
+            return (out if isinstance(out, list) else str(out)), "ok"
         except Exception as e:  # devolve o erro ao modelo em vez de quebrar o loop
-            return f"Erro em {name}: {e}"
+            return f"Erro em {name}: {e}", "erro"

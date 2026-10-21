@@ -71,7 +71,11 @@ def main() -> None:
         with busy:
             print(f"Você: {text}")
             emit("user", text=text)
-            say(brain.ask(text))
+            try:
+                answer = brain.ask(text)
+            except Exception as e:  # falha de rede/API: não deixa o painel preso em "pensando"
+                answer = f"Falha ao consultar a API ({type(e).__name__}). Tente novamente, {title}."
+            say(answer)
 
     if not args.text:
         from .voice import Voice
@@ -87,9 +91,11 @@ def main() -> None:
             ga = WebAuth(data_dir() / gcfg.get("credentials_file", "credentials.json"),
                          data_dir() / gcfg.get("token_file", "token.json"))
             hud = Hud(int(os.getenv("PORT", args.port)), handle, allowed_hosts=args.allow_host, access_code=code,
-                      bind="0.0.0.0", trust_proxy=True, google_auth=ga)
+                      bind="0.0.0.0", trust_proxy=True, google_auth=ga,
+                      audit_fn=memory.recent_actions, usage_fn=brain.usage)
         else:
-            hud = Hud(args.port, handle, allowed_hosts=args.allow_host, access_code=code if remote else "")
+            hud = Hud(args.port, handle, allowed_hosts=args.allow_host, access_code=code if remote else "",
+                      audit_fn=memory.recent_actions, usage_fn=brain.usage)
         url = hud.start()
         print(f"HUD: {url}" + (f"  (remoto: {', '.join(args.allow_host)})" if remote else ""))
         if not remote:

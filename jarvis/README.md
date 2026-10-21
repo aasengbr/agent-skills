@@ -78,6 +78,12 @@ O JARVIS roda num servidor online e você o usa pelo Chrome do celular. Passo a 
 
 Na nuvem, as ferramentas do PC (abrir apps, visão de tela, status do PC) ficam desligadas e as confirmações só vêm pelo HUD (sem HUD aberto, ações sensíveis são negadas). O endereço é **público na internet**: a única barreira é o código, por isso o servidor exige 20+ caracteres, aceita só os hosts configurados e bloqueia por IP depois de 10 erros em 5 min. Não reutilize esse código em outro lugar.
 
+## Controle de custo e registro de ações
+- **Teto diário** (`budget.daily_tokens`, padrão 500000 tokens de entrada+saída; 0 = sem limite). Ao atingir, o JARVIS para de chamar a API até o dia seguinte. O valor é uma estimativa: confira seu consumo real no console da Anthropic e ajuste. O HUD mostra "TOKENS HOJE". O teto limita tokens, não reais.
+- **Histórico limitado** (`assistant.max_history_turns`, padrão 12 turnos): cada chamada reenvia só a conversa recente, sem separar uma ferramenta do seu resultado. Memória de longo prazo (`remember`) não é afetada.
+- **Registro de ações:** todo uso de ferramenta (ok, negado, erro) fica no banco e aparece no painel FERRAMENTAS, inclusive após reiniciar (últimas 1000). Guarda ferramenta, argumentos (até 300 caracteres) e status; **o resultado não é guardado**. Os argumentos podem conter trechos de rascunhos ou nomes que você ditou.
+- Se a API falhar (rede, chave, limite), o JARVIS avisa e desfaz a pergunta pendente, sem deixar o painel preso em "pensando".
+
 ## Segurança (decisões de projeto)
 - E-mails, agenda e páginas web chegam ao modelo dentro de tags `untrusted` e o prompt do sistema os trata como dado, nunca como instrução (defesa contra prompt injection). É mitigação, não garantia: por isso toda escrita (`gmail_draft`, `calendar_create`, `write_file`, `open_app`) exige sua confirmação.
 - Arquivos: só dentro de `safety.workspace` (bloqueia `../`).

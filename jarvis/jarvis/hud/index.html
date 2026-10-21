@@ -46,6 +46,7 @@
 <div class="panel"><h2>SISTEMA</h2>
   CPU <span id="cpuv">--</span>%<div class="bar"><i id="cpu"></i></div>
   RAM <span id="ramv">--</span>%<div class="bar"><i id="ram"></i></div>
+  <div id="ubox" style="display:none">TOKENS HOJE <span id="uv">--</span><div class="bar"><i id="ub"></i></div></div>
   <h2>LINK</h2><span id="link">OFFLINE</span>
   <div id="gbox" style="display:none;margin-top:12px"><h2>GOOGLE</h2><span id="gst"></span> <button type="button" id="gbtn" style="min-height:32px;padding:0 10px">CONECTAR</button></div>
 </div>
@@ -77,6 +78,16 @@ function addTool(name, args, result) {
   d.textContent = name + " " + JSON.stringify(args) + (result ? " → " + String(result).slice(0,160) : "");
   $("log").prepend(d);
 }
+// Registro persistente de ações (sobrevive a reinícios); o resultado nunca é guardado, só ferramenta, argumentos e status
+async function loadAudit() {
+  try {
+    const r = await fetch("/audit?token=" + encodeURIComponent(TOKEN)); if (!r.ok) return;
+    const rows = await r.json(); $("log").textContent = "";
+    for (const a of rows.reverse()) { const d = document.createElement("div");
+      d.textContent = a.ts.slice(5, 16) + " " + a.tool + " " + a.args.slice(0, 80) + " [" + a.status + "]";
+      if (a.status !== "ok") d.style.borderColor = "#ffb300"; $("log").prepend(d); }
+  } catch (e) {}
+}
 
 let es = null, opened = false;
 function onMsg(e) {
@@ -89,13 +100,16 @@ function onMsg(e) {
     $("cpuv").textContent = Math.round(m.cpu); $("ramv").textContent = Math.round(m.ram); }
   else if (m.type === "google") { $("gbox").style.display = m.available ? "block" : "none";
     $("gst").textContent = m.connected ? "conectado" : "desconectado"; $("gbtn").style.display = m.connected ? "none" : "inline"; }
+  else if (m.type === "usage") { $("ubox").style.display = "block";
+    $("uv").textContent = m.limit ? m.used + " / " + m.limit : m.used + " (sem limite)";
+    $("ub").style.width = m.limit ? Math.min(100, m.used / m.limit * 100) + "%" : "0"; }
   else if (m.type === "confirm") { $("act").textContent = m.action; $("modal").classList.add("on"); }
 }
 function connect() {
   if (!TOKEN) { $("login").classList.add("on"); return; }
   opened = false;
   es = new EventSource("/events?token=" + encodeURIComponent(TOKEN));
-  es.onopen = () => { opened = true; $("link").textContent = "ONLINE"; $("login").classList.remove("on"); };
+  es.onopen = () => { opened = true; $("link").textContent = "ONLINE"; $("login").classList.remove("on"); loadAudit(); };
   es.onmessage = onMsg;
   es.onerror = () => {
     $("link").textContent = "OFFLINE";

@@ -5,6 +5,7 @@ assistant:
   model: claude-sonnet-5-5  # cérebro (nuvem)
   max_tokens: 1024
   max_tool_rounds: 6
+  max_history_turns: 12     # turnos de conversa enviados a cada chamada (controla custo)
 
 voice:
   wake_word: hey_jarvis     # modelo openWakeWord
@@ -50,3 +51,6 @@ home_assistant:             # casa inteligente (defina HA_TOKEN no .env)
   auto_domains: [light, switch, fan, media_player, scene]   # executa direto
   confirm_domains: [climate, cover, vacuum]                  # pede confirmação
   # lock, alarm_control_panel, script, automation, camera etc. ficam bloqueados e invisíveis
+
+budget:                     # teto diário de uso da API (soma de tokens de entrada e saída; 0 = sem limite)
+  daily_tokens: 500000      # valor estimado: ajuste olhando o seu consumo real no console da Anthropic
