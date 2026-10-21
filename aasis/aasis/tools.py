@@ -14,6 +14,7 @@ from .home import SCHEMAS as HOME_SCHEMAS
 from .home import Home
 from .memory import Memory
 from .vision import Screen
+from .llm.privacy import SECRET, tool_level
 from .world import World
 
 
@@ -187,7 +188,11 @@ class Tools:
         return cap <= 0 or self.memory.searches_today() < cap
 
     # ---------- registro ----------
-    def schemas(self) -> list[dict]:
+    def schemas(self, max_level: int = SECRET) -> list[dict]:
+        """Ferramentas oferecidas a um modelo; max_level = quanto de dado privado o provedor pode ver."""
+        return [t for t in self._all_schemas() if tool_level(t["name"]) <= max_level]
+
+    def _all_schemas(self) -> list[dict]:
         def tool(name, desc, props=None, required=None):
             return {
                 "name": name,

@@ -63,3 +63,32 @@ web_search:                 # busca na web da própria API da Anthropic (precisa
   enabled: true
   max_uses: 3               # buscas por pergunta
   country: BR               # localiza os resultados
+
+llm:                        # orquestrador de IAs: provedores, modelos, rotas por tarefa e privacidade
+  providers:
+    anthropic: {type: anthropic, trust: trusted}
+    # Todos abaixo falam o protocolo OpenAI (/chat/completions). Só ficam ativos se a chave existir no ambiente.
+    ollama:     {type: openai, trust: local,    base_url: "http://localhost:11434/v1", key_env: ""}   # só alcança o PC onde roda
+    deepseek:   {type: openai, trust: external, base_url: "https://api.deepseek.com",       key_env: DEEPSEEK_API_KEY}
+    moonshot:   {type: openai, trust: external, base_url: "https://api.moonshot.ai/v1",     key_env: MOONSHOT_API_KEY}
+    zai:        {type: openai, trust: external, base_url: "https://api.z.ai/api/paas/v4",   key_env: ZAI_API_KEY}
+    nvidia:     {type: openai, trust: external, base_url: "https://integrate.api.nvidia.com/v1", key_env: NVIDIA_API_KEY, rpm: 30}
+    openrouter: {type: openai, trust: external, base_url: "https://openrouter.ai/api/v1",   key_env: OPENROUTER_API_KEY}
+  models:                   # apelido -> provedor + ID. ID vazio usa a variável id_env (defina no ambiente)
+    haiku:      {provider: anthropic, id: claude-haiku-5-5,  tools: true, vision: true, effort: low}
+    sonnet:     {provider: anthropic, id: claude-sonnet-5-5, tools: true, vision: true, effort: medium}
+    opus:       {provider: anthropic, id: claude-opus-5-5,   tools: true, vision: true, effort: high}
+    # IDs abaixo NÃO foram verificados em fonte oficial (ver docs/orchestrator.md). Confirme em /llm/models.
+    deepseek:   {provider: deepseek,   id: deepseek-chat, tools: true}
+    kimi:       {provider: moonshot,   id: kimi-k3,       tools: true}
+    glm:        {provider: zai,        id: glm-5,         tools: false}   # suporte a ferramentas não confirmado
+    nim:        {provider: nvidia,     id_env: NVIDIA_MODEL,     tools: false}
+    openrouter: {provider: openrouter, id_env: OPENROUTER_MODEL, tools: true}
+    local:      {provider: ollama,     id_env: OLLAMA_MODEL,     tools: true}
+  routes:                   # tarefa -> modelos em ordem de preferência; o próximo assume se o anterior falhar
+    chat:   [sonnet, deepseek, kimi, openrouter]
+    deep:   [opus, sonnet]
+    memory: [haiku, local]
+    quick:  [haiku, sonnet]
+  privacy:                  # nível máximo de dado que cada tipo de provedor pode ver
+    max_level: {local: 3, trusted: 2, external: 0}   # 0 normal, 1 privado, 2 sensível (saúde/finanças), 3 secreto

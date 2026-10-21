@@ -104,16 +104,16 @@ def test_other_bad_request_propagates_and_history_rolls_back_after_trim():
                           max_history_turns=2)
         for q in ("a", "b", "c"):
             b.ask(q)
-        with pytest.raises(anthropic.BadRequestError):
-            b.ask("QUEBRA")
-        assert all(m["content"] != "QUEBRA" for m in b.history)                # pergunta pendente removida
+        out = b.ask("QUEBRA")                                                  # falha do provedor não derruba o AASIS
+        assert "todos os modelos disponíveis falharam" in out and "bad_request" in out
+        assert all(m.get("text") != "QUEBRA" for m in b.history)               # pergunta pendente removida
         assert b.history[-1]["role"] == "assistant"
 
 
 def test_system_prompt_scope_and_finance_rules():
     with tempfile.TemporaryDirectory() as tmp:
         b, _, _, _ = make(tmp, [])
-        s = b._system()
+        s = b._stable()
         assert "AAS Intelligent System" in s and "escopo é aberto" in s
         assert "NÃO dê recomendação de investimento" in s and "untrusted" in s and "J.A.R.V.I.S" not in s
 

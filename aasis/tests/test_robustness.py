@@ -80,12 +80,12 @@ def test_history_trim_keeps_pairs_intact():
         b, _, _ = make(tmp, script, max_history_turns=3)
         for i in range(10):
             b.ask(f"p{i}")
-        users = [m for m in b.history if m["role"] == "user" and isinstance(m["content"], str)]
-        assert len(users) == 3 and b.history[0]["role"] == "user" and isinstance(b.history[0]["content"], str)
-        for i, m in enumerate(b.history):  # todo tool_result tem seu tool_use logo antes
-            if m["role"] == "user" and isinstance(m["content"], list):
-                ids = {x.id for x in b.history[i - 1]["content"] if getattr(x, "type", "") == "tool_use"}
-                assert {r["tool_use_id"] for r in m["content"]} <= ids
+        users = [m for m in b.history if m["role"] == "user"]
+        assert len(users) == 3 and b.history[0]["role"] == "user"
+        for i, m in enumerate(b.history):  # todo resultado de ferramenta tem sua chamada logo antes
+            if m["role"] == "tool":
+                ids = {c["id"] for c in b.history[i - 1]["tool_calls"]}
+                assert {r["id"] for r in m["results"]} <= ids
 
 
 def test_daily_budget_blocks_before_and_during():

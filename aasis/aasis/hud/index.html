@@ -31,6 +31,10 @@
   #modal.on { display:flex; } #modal .box { border:1px solid #ffb300; background:#120d00; padding:24px; max-width:520px; }
   #modal p { color:#ffb300; word-break:break-word; } #modal button + button { background:#444; color:#fff; margin-left:8px; }
   #chips { display:flex; gap:6px; flex-wrap:wrap; } #chips button { background:transparent; color:var(--c); border:1px solid var(--dim); min-height:30px; padding:0 10px; }
+  .mrow { font-size:12px; margin-bottom:4px; display:flex; gap:6px; align-items:center; flex-wrap:wrap; }
+  .dot { width:8px; height:8px; border-radius:50%; display:inline-block; }
+  .mrow button { min-height:24px; padding:0 6px; font-size:11px; } .mrow a { color:var(--c); }
+  #deep.on { background:var(--c); color:#001018; }
   #alerts { position:fixed; top:10px; left:10px; right:10px; z-index:8; display:flex; flex-direction:column; gap:8px; pointer-events:none; }
   .alert { pointer-events:auto; border:1px solid #ffb300; background:#120d00; color:#ffb300; padding:12px; display:flex; gap:10px; align-items:center; justify-content:space-between; }
   .alert button { background:#ffb300; min-height:36px; }
@@ -52,13 +56,14 @@
   RAM <span id="ramv">--</span>%<div class="bar"><i id="ram"></i></div>
   <div id="ubox" style="display:none">TOKENS HOJE <span id="uv">--</span><div class="bar"><i id="ub"></i></div></div>
   <h2>LINK</h2><span id="link">OFFLINE</span>
+  <div id="mbox" style="display:none;margin-top:12px"><h2>MODELOS</h2><div id="models"></div><div id="lastmodel" style="margin-top:6px;opacity:.8"></div></div>
   <div id="gbox" style="display:none;margin-top:12px"><h2>GOOGLE</h2><span id="gst"></span> <button type="button" id="gbtn" style="min-height:32px;padding:0 10px">CONECTAR</button></div>
 </div>
 <div class="panel" id="center"><canvas id="reactor" width="600" height="600"></canvas><div id="status">STANDBY</div></div>
 <div class="panel"><h2>FERRAMENTAS</h2><div id="log"></div></div>
 <div class="panel" id="bottom">
   <div id="transcript"></div>
-  <div id="chips"><button type="button" data-q="Faça meu resumo do dia.">☀ Resumo do dia</button><button type="button" data-q="Quais são minhas tarefas pendentes?">☑ Tarefas</button><button type="button" data-q="Quais lembretes tenho pendentes?">⏰ Lembretes</button><button type="button" id="bell">🔔 Avisos</button></div>
+  <div id="chips"><button type="button" data-q="Faça meu resumo do dia.">☀ Resumo do dia</button><button type="button" data-q="Quais são minhas tarefas pendentes?">☑ Tarefas</button><button type="button" data-q="Quais lembretes tenho pendentes?">⏰ Lembretes</button><button type="button" id="deep" title="Usa o modelo mais capaz na próxima pergunta">🧠 Profundo</button><button type="button" id="bell">🔔 Avisos</button></div>
   <form id="f"><button type="button" id="mic" title="Falar">🎤</button><button type="button" id="spk" class="off" title="Ler respostas em voz alta">🔊</button>
     <input id="q" autocomplete="off" placeholder="Digite ou fale um comando..."><button>ENVIAR</button></form>
 </div>
@@ -93,6 +98,34 @@ function addTool(name, args, result) {
   $("log").prepend(d);
 }
 // Registro persistente de ações (sobrevive a reinícios); o resultado nunca é guardado, só ferramenta, argumentos e status
+async function loadModels() {
+  try {
+    const r = await fetch("/llm/status?token=" + encodeURIComponent(TOKEN)); if (!r.ok) return;
+    const rows = await r.json(); if (!Array.isArray(rows)) return;
+    $("mbox").style.display = "block"; $("models").textContent = "";
+    for (const m of rows) {
+      const d = document.createElement("div"); d.className = "mrow";
+      const dot = document.createElement("span"); dot.className = "dot";
+      dot.style.background = !m.available ? "#555" : m.paused ? "#ffb300" : (m.last && m.last.error) ? "#ff5252" : "#3dff9a";
+      const name = document.createElement("span");
+      name.textContent = m.alias + " · " + m.provider + (m.trust === "external" ? " ⚠" : "");
+      name.title = m.available ? (m.id + " | " + m.tokens_today + " tokens hoje" + (m.paused ? " | pausado " + m.paused + "s" : ""))
+                               : (m.reason || "indisponível");
+      d.append(dot, name);
+      if (m.available) {
+        const b = document.createElement("button"); b.type = "button"; b.textContent = "testar";
+        b.onclick = async () => { b.textContent = "..."; try {
+            const t = await (await post("/llm/test", {alias: m.alias})).json();
+            b.textContent = t.ok ? t.latency_ms + " ms" : "erro: " + t.error; } catch (e) { b.textContent = "falhou"; }
+          setTimeout(loadModels, 2500); };
+        d.append(b);
+      } else if (m.reason) { const r2 = document.createElement("span"); r2.style.opacity = ".6"; r2.textContent = m.reason; d.append(r2); }
+      if (m.available && m.provider) { const a = document.createElement("a"); a.textContent = "IDs"; a.target = "_blank"; a.rel = "noopener";
+        a.href = "/llm/models?provider=" + encodeURIComponent(m.provider) + "&token=" + encodeURIComponent(TOKEN); d.append(a); }
+      $("models").appendChild(d);
+    }
+  } catch (e) {}
+}
 async function loadAudit() {
   try {
     const r = await fetch("/audit?token=" + encodeURIComponent(TOKEN)); if (!r.ok) return;
@@ -117,6 +150,7 @@ function onMsg(e) {
   else if (m.type === "usage") { $("ubox").style.display = "block";
     $("uv").textContent = m.limit ? m.used + " / " + m.limit : m.used + " (sem limite)";
     $("ub").style.width = m.limit ? Math.min(100, m.used / m.limit * 100) + "%" : "0"; }
+  else if (m.type === "model") $("lastmodel").textContent = "último: " + m.alias + " (" + m.provider + ")";
   else if (m.type === "sources") addSources(m.items);
   else if (m.type === "notice") addLine("bot", "Aviso", m.text);
   else if (m.type === "reminder") showReminder(m);
@@ -126,7 +160,7 @@ function connect() {
   if (!TOKEN) { $("login").classList.add("on"); return; }
   opened = false;
   es = new EventSource("/events?token=" + encodeURIComponent(TOKEN));
-  es.onopen = () => { opened = true; $("link").textContent = "ONLINE"; $("login").classList.remove("on"); loadAudit(); };
+  es.onopen = () => { opened = true; $("link").textContent = "ONLINE"; $("login").classList.remove("on"); loadAudit(); loadModels(); };
   es.onmessage = onMsg;
   es.onerror = () => {
     $("link").textContent = "OFFLINE";
@@ -153,7 +187,7 @@ function showReminder(m) {
     navigator.serviceWorker.ready.then(r => r.showNotification("AASIS", {body: m.text, tag: id})).catch(() => {});
 }
 $("bell").onclick = () => { if (window.Notification) Notification.requestPermission().then(p => { $("bell").textContent = p === "granted" ? "🔔 Ativados" : "🔕 Bloqueados"; }); };
-document.querySelectorAll("#chips button[data-q]").forEach(b => b.onclick = () => post("/ask", {text: b.dataset.q}));
+document.querySelectorAll("#chips button[data-q]").forEach(b => b.onclick = () => ask(b.dataset.q));
 
 // Voz no navegador (Android/Chrome). O reconhecimento usa o serviço de voz do Google.
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -168,12 +202,15 @@ if (!SR) { $("mic").style.display = "none"; } else {
   const rec = new SR(); rec.lang = "pt-BR"; rec.interimResults = false; rec.maxAlternatives = 1;
   rec.onstart = () => { $("mic").classList.add("on"); setState("listening"); };
   rec.onend = () => { $("mic").classList.remove("on"); if (state === "listening") setState("standby"); };
-  rec.onresult = e => post("/ask", {text: e.results[0][0].transcript});
+  rec.onresult = e => ask(e.results[0][0].transcript);
   $("mic").onclick = () => { try { rec.start(); } catch (e) {} };
 }
 if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});
 connect();
-$("f").onsubmit = ev => { ev.preventDefault(); const v = $("q").value.trim(); if (!v) return; $("q").value = ""; post("/ask", {text:v}); };
+let deepOn = false;
+function ask(text) { post("/ask", deepOn ? {text, deep: true} : {text}); deepOn = false; $("deep").classList.remove("on"); }
+$("deep").onclick = () => { deepOn = !deepOn; $("deep").classList.toggle("on", deepOn); };
+$("f").onsubmit = ev => { ev.preventDefault(); const v = $("q").value.trim(); if (!v) return; $("q").value = ""; ask(v); };
 const answer = ok => { $("modal").classList.remove("on"); post("/confirm", {ok}); };
 $("yes").onclick = () => answer(true); $("no").onclick = () => answer(false);
 

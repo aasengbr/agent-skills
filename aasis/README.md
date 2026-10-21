@@ -80,6 +80,12 @@ O AASIS roda num servidor online e você o usa pelo Chrome do celular. Passo a p
 
 Na nuvem, as ferramentas do PC (abrir apps, visão de tela, status do PC) ficam desligadas e as confirmações só vêm pelo HUD (sem HUD aberto, ações sensíveis são negadas). O endereço é **público na internet**: a única barreira é o código, por isso o servidor exige 20+ caracteres, aceita só os hosts configurados e bloqueia por IP depois de 10 erros em 5 min. Não reutilize esse código em outro lugar.
 
+## Orquestrador de IAs (vários modelos e provedores)
+Anthropic (Haiku, Sonnet, Opus) e, opcionalmente, DeepSeek, Kimi, GLM, NVIDIA, OpenRouter e modelos locais (Ollama),
+com roteamento por tarefa, troca automática se um falhar, limites por provedor e **regras de privacidade: provedores
+externos só veem perguntas sem dado pessoal**. Painel **Modelos** no HUD (testar, ver IDs reais) e botão
+🧠 **Profundo**. Detalhes, limites e o que **não** foi verificado: [`docs/orchestrator.md`](docs/orchestrator.md).
+
 ## Mundo: notícias, mercado, finanças e viagens
 O AASIS tem escopo aberto: responde sobre qualquer assunto e, para dados atuais, usa ferramentas em vez de inventar.
 - **Busca na web** (ferramenta do servidor da Anthropic, `web_search_20250305`): respostas com **fontes citadas** (links no HUD, não lidos em voz alta). Cobrada à parte pela Anthropic (a documentação informa US$ 10 por mil buscas; confira o preço atual). Limites: `web_search.max_uses` por pergunta e `budget.daily_searches` por dia. Se a organização desativou a busca no Console, a API devolve erro 400; o AASIS detecta, avisa e segue sem ela, em vez de parar tudo.
