@@ -36,8 +36,8 @@ def test_write_read_and_memory():
         t = make(tmp)
         t.run("write_file", {"path": "a.txt", "content": "olá"}, lambda _: True)
         assert t.run("read_file", {"path": "a.txt"}, lambda _: True) == "olá"
-        t.run("remember", {"text": "gosto de café"}, lambda _: True)
-        assert "café" in t.run("recall", {"query": "café"}, lambda _: True)
+        t.run("memory_save", {"content": "gosto de café"}, lambda _: True)
+        assert "café" in t.run("memory_search", {"query": "café"}, lambda _: True)
 
 
 def test_app_allowlist_and_unknown_tool():

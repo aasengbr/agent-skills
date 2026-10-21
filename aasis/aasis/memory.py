@@ -5,6 +5,8 @@ import sqlite3
 import threading
 from pathlib import Path
 
+from .memstore import LongTermMemory
+
 
 class Memory:
     def __init__(self, path: Path, tz=None):
@@ -13,7 +15,7 @@ class Memory:
         self.db = sqlite3.connect(path, check_same_thread=False)
         self._lock = threading.RLock()
         with self._lock:
-            self.db.execute(
+            self.db.execute(  # tabela antiga: só existe para migrar fatos de versões anteriores
                 "CREATE TABLE IF NOT EXISTS facts ("
                 "id INTEGER PRIMARY KEY, text TEXT NOT NULL, "
                 "created TEXT DEFAULT CURRENT_TIMESTAMP)"
@@ -34,33 +36,24 @@ class Memory:
                 "due_utc TEXT NOT NULL, state TEXT DEFAULT 'pending')"
             )
             self.db.commit()
+        self.mem = LongTermMemory(self.db, self._lock, tz)
 
     def _today(self) -> str:
         return dt.datetime.now(self.tz).date().isoformat()
 
-    # ---------- fatos ----------
+    # ---------- fatos (atalhos para a API antiga; o armazenamento real é self.mem) ----------
     def remember(self, text: str) -> int:
-        with self._lock:
-            cur = self.db.execute("INSERT INTO facts(text) VALUES (?)", (text.strip(),))
-            self.db.commit()
-            return cur.lastrowid
+        return self.mem.save("fact", text)
 
     def recall(self, query: str = "", limit: int = 10) -> list[str]:
-        with self._lock:
-            rows = self.db.execute(
-                "SELECT text FROM facts WHERE text LIKE ? ORDER BY id DESC LIMIT ?",
-                (f"%{query}%", limit),
-            ).fetchall()
-        return [r[0] for r in rows]
+        rows = self.mem.search(query, limit=limit) if query.strip() else self.mem.list("", limit=limit)
+        return [r["content"] for r in rows]
 
     def forget(self, fact_id: int) -> bool:
-        with self._lock:
-            cur = self.db.execute("DELETE FROM facts WHERE id = ?", (fact_id,))
-            self.db.commit()
-            return cur.rowcount > 0
+        return self.mem.forget(fact_id) > 0
 
     def all_for_prompt(self, limit: int = 30) -> str:
-        return "\n".join(f"- {f}" for f in self.recall("", limit))
+        return self.mem.context("", 3)
 
     # ---------- uso diário de tokens (teto de gasto) ----------
     def usage_today(self, provider: str | None = None) -> int:

@@ -80,6 +80,20 @@ O AASIS roda num servidor online e você o usa pelo Chrome do celular. Passo a p
 
 Na nuvem, as ferramentas do PC (abrir apps, visão de tela, status do PC) ficam desligadas e as confirmações só vêm pelo HUD (sem HUD aberto, ações sensíveis são negadas). O endereço é **público na internet**: a única barreira é o código, por isso o servidor exige 20+ caracteres, aceita só os hosts configurados e bloqueia por IP depois de 10 erros em 5 min. Não reutilize esse código em outro lugar.
 
+## Memória (o coração do AASIS)
+Memória tipada que **aprende, lembra e esquece sob o seu controle**: perfil (alergias, contatos), fatos, **estados que
+mudam** (onde está o carro: o valor novo substitui o antigo e o histórico fica), eventos e preferências.
+- **Sempre disponível:** a cada pergunta o AASIS recupera o que é relevante e **o perfil nunca sai do contexto**.
+- **Aprende sozinho** com o que você afirma ("eu tenho um gato", "moro em Recife") e avisa ("Anotei: ..."). **Saúde,
+  finanças e perfil só entram com a sua aprovação** (aviso com Sim/Não e tela **🗂 Memória**).
+- **Segurança:** nada vindo de e-mail, web ou notícia vira fato sozinho (fica pendente); recusa senhas e cartões;
+  provedores externos nunca recebem memória pessoal; o registro de ações não guarda conteúdo.
+- **Você manda:** ver tudo, apagar (✕), exportar JSON, e dizer "esqueça X". **📍 Estacionei aqui** guarda o GPS + nota
+  (em garagem coberta o GPS erra: confie na nota).
+- Limites e o que falta (criptografia em repouso, backup, lembretes de remédio confiáveis): [`docs/memory-design.md`](docs/memory-design.md).
+- **Atenção:** os dados de saúde ficam em texto no banco do servidor e os trechos usados numa resposta vão à API da
+  Anthropic. **Não confie remédios ao AASIS** antes do deploy real, de um canal de aviso confiável e de medir a entrega.
+
 ## Orquestrador de IAs (vários modelos e provedores)
 Anthropic (Haiku, Sonnet, Opus) e, opcionalmente, DeepSeek, Kimi, GLM, NVIDIA, OpenRouter e modelos locais (Ollama),
 com roteamento por tarefa, troca automática se um falhar, limites por provedor e **regras de privacidade: provedores

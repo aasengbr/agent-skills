@@ -92,3 +92,6 @@ llm:                        # orquestrador de IAs: provedores, modelos, rotas po
     quick:  [haiku, sonnet]
   privacy:                  # nível máximo de dado que cada tipo de provedor pode ver
     max_level: {local: 3, trusted: 2, external: 0}   # 0 normal, 1 privado, 2 sensível (saúde/finanças), 3 secreto
+
+memory:                     # memória de longo prazo (docs/memory-design.md)
+  learn: true               # aprende sozinho com o que você afirma; saúde/finanças/perfil só com a sua aprovação

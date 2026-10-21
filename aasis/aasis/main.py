@@ -81,6 +81,7 @@ def main() -> None:
             except Exception as e:  # falha de rede/API: não deixa o painel preso em "pensando"
                 answer = f"Falha ao consultar a API ({type(e).__name__}). Tente novamente, {title}."
             say(answer, brain.last_sources)
+            threading.Thread(target=brain.learn, args=(text,), daemon=True).start()  # aprende depois de responder
 
     if not args.text:
         from .voice import Voice
@@ -99,12 +100,12 @@ def main() -> None:
                       bind="0.0.0.0", trust_proxy=True, google_auth=ga,
                       audit_fn=memory.recent_actions, usage_fn=brain.usage, ack_fn=memory.ack_reminder,
                       llm_status_fn=brain.orch.status, llm_test_fn=brain.orch.test,
-                      llm_models_fn=brain.orch.list_models)
+                      llm_models_fn=brain.orch.list_models, memory=memory)
         else:
             hud = Hud(args.port, handle, allowed_hosts=args.allow_host, access_code=code if remote else "",
                       audit_fn=memory.recent_actions, usage_fn=brain.usage, ack_fn=memory.ack_reminder,
                       llm_status_fn=brain.orch.status, llm_test_fn=brain.orch.test,
-                      llm_models_fn=brain.orch.list_models)
+                      llm_models_fn=brain.orch.list_models, memory=memory)
         url = hud.start()
         print(f"HUD: {url}" + (f"  (remoto: {', '.join(args.allow_host)})" if remote else ""))
         if not remote:
