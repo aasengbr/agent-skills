@@ -44,3 +44,9 @@ screen:                     # visão de tela (somente leitura)
   enabled: true
   monitor: 1                # 1 = principal, 0 = todos
   max_side: 1568            # redimensiona a captura antes de enviar
+
+home_assistant:             # casa inteligente (defina HA_TOKEN no .env)
+  url: http://homeassistant.local:8123
+  auto_domains: [light, switch, fan, media_player, scene]   # executa direto
+  confirm_domains: [climate, cover, vacuum]                  # pede confirmação
+  # lock, alarm_control_panel, script, automation, camera etc. ficam bloqueados e invisíveis

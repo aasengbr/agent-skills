@@ -9,12 +9,15 @@ import requests
 from .config import ROOT
 from .google_tools import SCHEMAS as GOOGLE_SCHEMAS
 from .google_tools import Google
+from .home import SCHEMAS as HOME_SCHEMAS
+from .home import Home
 from .memory import Memory
 from .vision import Screen
 
 
 class Tools:
-    def __init__(self, cfg: dict, memory: Memory, google: Google | None = None, screen: Screen | None = None):
+    def __init__(self, cfg: dict, memory: Memory, google: Google | None = None, screen: Screen | None = None,
+                 home: Home | None = None):
         self.cfg = cfg
         self.memory = memory
         self.workspace = Path(cfg["safety"]["workspace"])
@@ -23,6 +26,8 @@ class Tools:
         google = google or Google(cfg, ROOT)
         self.google = google if google.available else None
         self.screen = screen or Screen(cfg)
+        home = home or Home(cfg)
+        self.home = home if home.available else None
 
     # ---------- segurança ----------
     def _safe_path(self, rel: str) -> Path:
@@ -107,6 +112,9 @@ class Tools:
         ]
         if self.screen.enabled:
             base.append(tool("screen_look", "Captura e analisa a tela do usuário (somente visão)."))
+        if self.home:
+            for name, desc, props, req in HOME_SCHEMAS:
+                base.append(tool(name, desc, props, req))
         if self.google:
             for name, desc, props, req in GOOGLE_SCHEMAS:
                 base.append(tool(name, desc, {k: {"type": v} for k, v in props.items()}, req))
@@ -115,8 +123,9 @@ class Tools:
     def run(self, name: str, args: dict, confirm) -> str | list:
         if name not in {t["name"] for t in self.schemas()}:
             return f"Ferramenta desconhecida: {name}"
-        fn = getattr(self, name, None) or getattr(self.google, name)
-        if name in self.confirm_tools and not confirm(f"{name} {args}"):
+        fn = getattr(self, name, None) or getattr(self.google, name, None) or getattr(self.home, name)
+        needs = name in self.confirm_tools or (name == "ha_call" and self.home.needs_confirm(args))
+        if needs and not confirm(f"{name} {args}"):
             return "Ação negada pelo usuário."
         try:
             out = fn(**args)
