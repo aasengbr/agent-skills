@@ -167,4 +167,9 @@ def test_world_readable_env_file_warns():
 
 
 def test_unwritable_data_dir_fails():
-    assert levels(run_checks(CFG, env=GOOD, data=Path("/proc/nao-existe/x"), serve=False))["Pasta de dados gravável"] == FAIL
+    """Uma pasta 'dentro de um arquivo' não pode ser criada em nenhum sistema (Linux ou Windows)."""
+    with tempfile.TemporaryDirectory() as tmp:
+        f = Path(tmp) / "arquivo.txt"
+        f.write_text("x")
+        assert levels(run_checks(CFG, env=GOOD, data=f / "dados", serve=False))["Pasta de dados gravável"] == FAIL
+        assert levels(run_checks(CFG, env=GOOD, data=Path(tmp) / "novo", serve=False))["Pasta de dados gravável"] == OK
