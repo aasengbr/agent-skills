@@ -126,6 +126,9 @@ O AASIS tem escopo aberto: responde sobre qualquer assunto e, para dados atuais,
 - **Registro de ações:** todo uso de ferramenta (ok, negado, erro) fica no banco e aparece no painel FERRAMENTAS, inclusive após reiniciar (últimas 1000). Guarda ferramenta, argumentos (até 300 caracteres) e status; **o resultado não é guardado**. Os argumentos podem conter trechos de rascunhos ou nomes que você ditou.
 - Se a API falhar (rede, chave, limite), o AASIS avisa e desfaz a pergunta pendente, sem deixar o painel preso em "pensando".
 
+## Notebook (Windows)
+Para testar hoje, sem hospedagem: [`docs/notebook.md`](docs/notebook.md). Não serve para lembretes críticos (o notebook dorme). Os testes rodam em Windows no CI do GitHub.
+
 ## Opção C: VPS (sempre ligado, recomendado para uso diário)
 Servidor próprio 24 h com HTTPS automático (Caddy), firewall, backup diário do banco e instalação por `cloud-init`
 (colar no painel do provedor, sem terminal). É o caminho para o que não pode "dormir" (lembretes, avisos).

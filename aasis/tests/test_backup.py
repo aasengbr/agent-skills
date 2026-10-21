@@ -24,7 +24,8 @@ def test_backup_is_consistent_private_and_pruned():
         outs = [backup_db(tmp / "aasis.db", dest, keep=3, now=t0 + i * 100) for i in range(5)]
         files = sorted(dest.glob("aasis-*.db"))
         assert len(files) == 3 and files == outs[-3:]                      # só os 3 mais recentes
-        assert oct(os.stat(files[-1]).st_mode & 0o777) == "0o600" and oct(os.stat(dest).st_mode & 0o777) == "0o700"
+        if sys.platform != "win32":  # permissões POSIX não existem no Windows
+            assert oct(os.stat(files[-1]).st_mode & 0o777) == "0o600" and oct(os.stat(dest).st_mode & 0o777) == "0o700"
         restored = Memory(files[-1])                                       # o backup abre e tem os dados
         assert [r["content"] for r in restored.mem.list()] == ["Gosta de jazz"]
         mem.mem.save("fact", "Fato novo depois do backup")                 # o original segue funcionando

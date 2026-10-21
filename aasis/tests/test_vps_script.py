@@ -4,7 +4,11 @@ import sys
 import tempfile
 from pathlib import Path
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+pytestmark = pytest.mark.skipif(sys.platform == "win32", reason="script bash: só faz sentido em Linux")
 
 SCRIPT = Path(__file__).resolve().parent.parent / "deploy" / "vps" / "post-install.sh"
 SECRET_KEY, SECRET_CODE = "sk-ant-MUITO-SECRETA", "uma frase longa e secreta 12345"
