@@ -1,4 +1,4 @@
-"""Ferramentas que o JARVIS pode acionar. Tudo é restrito por allowlist/workspace."""
+"""Ferramentas que o AASIS pode acionar. Tudo é restrito por allowlist/workspace."""
 import datetime as dt
 import subprocess
 from pathlib import Path
@@ -157,7 +157,7 @@ class Tools:
     def web_fetch(self, url: str) -> str:
         if not url.startswith(("http://", "https://")):
             return "URL inválida."
-        r = requests.get(url, timeout=15, headers={"User-Agent": "JARVIS/0.1"})
+        r = requests.get(url, timeout=15, headers={"User-Agent": "AASIS/0.1"})
         r.raise_for_status()
         return r.text[:6000]
 

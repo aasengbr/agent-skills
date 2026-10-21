@@ -1,5 +1,5 @@
 .env
-jarvis.db
+aasis.db
 __pycache__/
 .venv/
 credentials.json

@@ -1,5 +1,5 @@
 assistant:
-  name: JARVIS
+  name: AASIS
   user_title: senhor        # como o assistente te chama
   language: pt-BR
   timezone: America/Sao_Paulo   # datas, lembretes e virada do teto diário (o servidor na nuvem roda em UTC)
@@ -18,8 +18,8 @@ voice:
   tts_rate: 185
 
 safety:
-  # Pastas que o JARVIS pode ler/escrever. Tudo fora disso é bloqueado.
-  workspace: "~/jarvis-workspace"
+  # Pastas que o AASIS pode ler/escrever. Tudo fora disso é bloqueado.
+  workspace: "~/aasis-workspace"
   # Apps que podem ser abertos (nome amigável -> comando do Windows)
   apps:
     navegador: "start msedge"

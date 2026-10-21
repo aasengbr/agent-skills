@@ -76,7 +76,7 @@ class Memory:
             )
             self.db.commit()
 
-    # ---------- auditoria: o que o JARVIS executou ----------
+    # ---------- auditoria: o que o AASIS executou ----------
     def log_action(self, tool: str, args: dict, status: str, note: str = "", keep: int = 1000) -> None:
         """Guarda ferramenta, argumentos (truncados) e status. O resultado NÃO é guardado (pode ter e-mails)."""
         with self._lock:

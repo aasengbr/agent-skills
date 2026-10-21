@@ -6,11 +6,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import pytest  # noqa: E402
 
-from jarvis.google_tools import Google  # noqa: E402
-from jarvis.home import Home  # noqa: E402
-from jarvis.memory import Memory  # noqa: E402
-from jarvis.tools import Tools  # noqa: E402
-from jarvis.vision import Screen  # noqa: E402
+from aasis.google_tools import Google  # noqa: E402
+from aasis.home import Home  # noqa: E402
+from aasis.memory import Memory  # noqa: E402
+from aasis.tools import Tools  # noqa: E402
+from aasis.vision import Screen  # noqa: E402
 
 STATES = [
     {"entity_id": "light.sala", "state": "off", "attributes": {"friendly_name": "Luz da sala"}},

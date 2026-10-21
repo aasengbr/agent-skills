@@ -1,4 +1,4 @@
-"""Ponto de entrada: `python -m jarvis.main [--text] [--hud]`."""
+"""Ponto de entrada: `python -m aasis.main [--text] [--hud]`."""
 import argparse
 import os
 import sys
@@ -15,34 +15,34 @@ from .scheduler import Scheduler
 from .tools import Tools
 
 def main() -> None:
-    ap = argparse.ArgumentParser(description="JARVIS")
+    ap = argparse.ArgumentParser(description="AASIS")
     ap.add_argument("--text", action="store_true", help="modo texto (sem microfone)")
     ap.add_argument("--hud", action="store_true", help="abre a interface visual no navegador")
     ap.add_argument("--port", type=int, default=8765, help="porta do HUD (127.0.0.1)")
     ap.add_argument("--allow-host", action="append", default=[], metavar="HOST",
-                    help="acesso remoto (celular) via proxy HTTPS, ex.: meu-pc.tailnet.ts.net. Exige JARVIS_HUD_CODE")
+                    help="acesso remoto (celular) via proxy HTTPS, ex.: meu-pc.tailnet.ts.net. Exige AASIS_HUD_CODE")
     ap.add_argument("--serve", action="store_true",
-                    help="modo nuvem: sem terminal, escuta em 0.0.0.0:$PORT, só HUD (celular). Exige JARVIS_HUD_CODE")
+                    help="modo nuvem: sem terminal, escuta em 0.0.0.0:$PORT, só HUD (celular). Exige AASIS_HUD_CODE")
     args = ap.parse_args()
 
     cfg = load_config()  # carrega também o .env
-    code = os.getenv("JARVIS_HUD_CODE", "")
+    code = os.getenv("AASIS_HUD_CODE", "")
     if args.serve:
         # endpoint público na internet: código mais longo e hosts explícitos são obrigatórios
-        env_hosts = [h.strip() for h in os.getenv("JARVIS_ALLOWED_HOSTS", "").split(",") if h.strip()]
+        env_hosts = [h.strip() for h in os.getenv("AASIS_ALLOWED_HOSTS", "").split(",") if h.strip()]
         env_hosts += [os.environ[v] for v in ("RENDER_EXTERNAL_HOSTNAME", "RAILWAY_PUBLIC_DOMAIN") if os.getenv(v)]
         args.allow_host = args.allow_host + env_hosts
         if len(code) < 20:
-            sys.exit("Modo nuvem exige JARVIS_HUD_CODE com pelo menos 20 caracteres.")
+            sys.exit("Modo nuvem exige AASIS_HUD_CODE com pelo menos 20 caracteres.")
         if not args.allow_host:
-            sys.exit("Modo nuvem exige JARVIS_ALLOWED_HOSTS (ex.: meu-jarvis.onrender.com).")
+            sys.exit("Modo nuvem exige AASIS_ALLOWED_HOSTS (ex.: meu-aasis.onrender.com).")
         args.text = True
         cfg["runtime"] = {"cloud": True}
         cfg["screen"] = {"enabled": False}
     elif args.allow_host and len(code) < 12:
-        sys.exit("Acesso remoto exige JARVIS_HUD_CODE com pelo menos 12 caracteres (defina no .env).")
+        sys.exit("Acesso remoto exige AASIS_HUD_CODE com pelo menos 12 caracteres (defina no .env).")
     name, title = cfg["assistant"]["name"], cfg["assistant"]["user_title"]
-    memory = Memory(data_dir() / "jarvis.db", tz=ZoneInfo(cfg["assistant"].get("timezone", "America/Sao_Paulo")))
+    memory = Memory(data_dir() / "aasis.db", tz=ZoneInfo(cfg["assistant"].get("timezone", "America/Sao_Paulo")))
     tools = Tools(cfg, memory)
     voice = None
     hud: Hud | None = None

@@ -13,7 +13,7 @@ SCOPES = [
     "https://www.googleapis.com/auth/gmail.compose",  # usado só para criar rascunhos; o código nunca envia
     "https://www.googleapis.com/auth/calendar.events",
     "https://www.googleapis.com/auth/drive.readonly",
-    "https://www.googleapis.com/auth/drive.file",  # escrita só em arquivos criados pelo JARVIS
+    "https://www.googleapis.com/auth/drive.file",  # escrita só em arquivos criados pelo AASIS
 ]
 
 
@@ -260,7 +260,7 @@ SCHEMAS = [
 ]
 
 
-if __name__ == "__main__":  # python -m jarvis.google_tools  -> autoriza a conta Google (1ª vez)
+if __name__ == "__main__":  # python -m aasis.google_tools  -> autoriza a conta Google (1ª vez)
     from .config import ROOT, load_config
 
     g = Google(load_config(), ROOT)

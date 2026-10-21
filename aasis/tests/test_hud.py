@@ -8,7 +8,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from jarvis.hud import Hud  # noqa: E402
+from aasis.hud import Hud  # noqa: E402
 
 
 def req(hud, path, data=None, token=None, host=None):
@@ -83,7 +83,7 @@ def test_remote_mode_code_not_in_page_hosts_and_lockout():
     try:
         code, body = req(hud, "/")
         assert code == 200 and CODE.encode() not in body and b"__TOKEN__" not in body   # nunca embutido
-        for path, ctype in (("/manifest.webmanifest", b"JARVIS"), ("/sw.js", b"fetch"), ("/icon-192.png", b"PNG")):
+        for path, ctype in (("/manifest.webmanifest", b"AASIS"), ("/sw.js", b"fetch"), ("/icon-192.png", b"PNG")):
             c, b = req(hud, path)
             assert c == 200 and ctype in b
         assert req(hud, "/ask", {"text": "oi"}, token=CODE, host="pc.tail.ts.net")[0] == 202   # host liberado

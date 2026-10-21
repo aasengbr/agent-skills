@@ -7,11 +7,11 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from jarvis.google_tools import Google, WebAuth  # noqa: E402
-from jarvis.hud import Hud  # noqa: E402
-from jarvis.memory import Memory  # noqa: E402
-from jarvis.tools import Tools  # noqa: E402
-from jarvis.vision import Screen  # noqa: E402
+from aasis.google_tools import Google, WebAuth  # noqa: E402
+from aasis.hud import Hud  # noqa: E402
+from aasis.memory import Memory  # noqa: E402
+from aasis.tools import Tools  # noqa: E402
+from aasis.vision import Screen  # noqa: E402
 
 CODE = "codigo-de-nuvem-bem-longo-123"
 HOST = "meu.onrender.com"
