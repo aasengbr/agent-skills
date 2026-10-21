@@ -33,6 +33,18 @@ python -m aasis.main --hud
 O Windows pode precisar de uma **voz em português** instalada (Configurações > Hora e idioma > Fala). O microfone é pedido na
 primeira vez. Não testado: as bibliotecas de voz podem exigir passos extras no Windows.
 
+## Teste com Telegram e remédios (recomendado antes de contratar servidor)
+O Telegram só faz conexões de **saída**: não precisa de domínio, IP fixo nem abrir porta no roteador.
+1. **Telegram (celular):** @BotFather > `/newbot` > guarde o token. Abra o seu bot e toque em **Iniciar**.
+2. **`.env`** (`notepad .env`): `TELEGRAM_BOT_TOKEN=` com o token (sem espaços nem comentário na linha).
+3. **chat_id:** `python -m aasis.doctor --find-chat-id` > copie a linha `TELEGRAM_CHAT_ID=...` para o `.env`.
+4. **Diagnóstico:** `python -m aasis.doctor --online` > deve chegar uma mensagem de teste no celular e terminar sem `FALHA`.
+5. **Rodar:** `python -m aasis.main --text --hud`. O celular recebe "AASIS online". Mantenha o terminal aberto.
+6. **Deixar o notebook acordado durante o teste:** Configurações > Sistema > Energia > Suspensão = **Nunca** (na tomada), e
+   deixe-o ligado na tomada. Notebook suspenso não avisa remédio.
+7. **Teste de aceitação:** itens 1 a 6, 8 e 9 da tabela de [`deploy-checklist.md`](deploy-checklist.md) (use remédio **fictício**).
+   Os itens 7 (derrubar o servidor) e 10 (backup) só se aplicam ao VPS.
+
 ## Celular acessando o notebook
 Use o Tailscale (instalado no notebook e no celular) e siga a "Opção A" do README. Só funciona com o notebook ligado.
 

@@ -21,13 +21,10 @@ combinação de remédios; para dúvida clínica, fale com médico ou farmacêut
 
 ## 3. Configuração (uma vez, ~5 min, pelo celular)
 1. No Telegram, abra o **@BotFather** > `/newbot` > escolha nome e usuário. Ele devolve o **token**.
-2. Abra o seu bot e envie `/start`. Ele responde com o seu **chat_id** (número).
-3. No `.env` do AASIS (no VPS: `deploy/vps/.env`):
-   ```
-   TELEGRAM_BOT_TOKEN=123456:ABC...
-   TELEGRAM_CHAT_ID=987654321
-   ```
-4. Reinicie o AASIS. Você recebe "AASIS online". Se não receber, confira token e chat_id.
+2. Coloque só o token no `.env` (`TELEGRAM_BOT_TOKEN=...`). Abra o seu bot no Telegram, toque em **Iniciar** (ou envie "oi").
+3. Descubra o seu chat_id (o AASIS não pode estar rodando): `python -m aasis.doctor --find-chat-id`. Ele imprime a linha
+   `TELEGRAM_CHAT_ID=...` com o seu nome; copie para o `.env`. O token fica na sua máquina.
+4. Inicie o AASIS. Você recebe "AASIS online". Se não receber, confira token e chat_id.
 5. (Recomendado) Monitor externo: crie uma verificação no healthchecks.io (plano gratuito), com período de 5 min e
    tolerância de 5 min, ligue o aviso ao seu e-mail/Telegram e coloque a URL no `.env`:
    `HEALTHCHECK_URL=https://hc-ping.com/xxxxxxxx-...` (precisa ser `https`).
@@ -56,7 +53,7 @@ heartbeat:
 
 ## 5. Segurança e privacidade (leia)
 - Só o **seu chat privado** é atendido. Outros usuários e grupos são ignorados; o único retorno a um estranho é o id do
-  chat dele em resposta a `/start` (no máximo 1 vez por hora).
+  chat dele em resposta a `/start` (no máximo 1 vez por hora), e só com o AASIS rodando.
 - Confirmações usam código de uso único; código antigo ou forjado não faz nada.
 - O token não aparece em logs, erros nem mensagens (testado). Quem tiver o token controla o bot: guarde só no `.env`.
 - **Mensagens de bot no Telegram não têm criptografia ponta a ponta:** o Telegram consegue ver o conteúdo. Se isso

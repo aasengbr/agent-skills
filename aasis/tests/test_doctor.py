@@ -173,3 +173,50 @@ def test_unwritable_data_dir_fails():
         f.write_text("x")
         assert levels(run_checks(CFG, env=GOOD, data=f / "dados", serve=False))["Pasta de dados gravável"] == FAIL
         assert levels(run_checks(CFG, env=GOOD, data=Path(tmp) / "novo", serve=False))["Pasta de dados gravável"] == OK
+
+
+# ---------- descobrir o chat_id ----------
+def _private(uid, first="Ana", username="ana", update_id=1):
+    return {"update_id": update_id, "message": {"message_id": 1, "text": "oi", "from": {"id": uid},
+                                               "chat": {"id": uid, "type": "private", "first_name": first, "username": username}}}
+
+
+def test_find_chat_ids_lists_private_chats_only_without_confirming_updates():
+    from aasis.doctor import find_chat_ids
+    http = FakeHttp()
+    http.updates = [_private(777, update_id=1), _private(777, update_id=2), _private(888, "Bia", "", 3),
+                    {"update_id": 4, "message": {"text": "x", "from": {"id": 5}, "chat": {"id": -100, "type": "group", "title": "G"}}},
+                    {"update_id": 5, "callback_query": {"id": "c", "from": {"id": 9}, "data": "x"}}]
+    found = find_chat_ids(TOKEN, http=http)
+    assert [(c["id"], c["name"]) for c in found] == [(777, "Ana"), (888, "Bia")]       # sem duplicata, sem grupo
+    assert http.sent("getUpdates")[0]["offset"] == 0                                    # não avança o offset: nada é "consumido"
+
+
+def test_find_chat_ids_empty_and_errors_never_leak_the_token():
+    from aasis.doctor import find_chat_ids
+    from aasis.telegram import TelegramError
+    assert find_chat_ids(TOKEN, http=FakeHttp()) == []
+    http = FakeHttp()
+    http.reply = {"ok": False, "error_code": 401, "description": "Unauthorized"}
+    with pytest.raises(TelegramError) as e:
+        find_chat_ids(TOKEN, http=http)
+    assert "401" in str(e.value) and TOKEN not in str(e.value)
+    http.fail = True
+    http.reply = None
+    with pytest.raises(TelegramError) as e:
+        find_chat_ids(TOKEN, http=http)
+    assert TOKEN not in str(e.value)
+
+
+def test_find_chat_id_command_prints_the_env_line(monkeypatch, capsys):
+    import aasis.doctor as d
+    monkeypatch.setattr(sys, "argv", ["doctor", "--find-chat-id"])
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", TOKEN)
+    monkeypatch.setattr(d, "find_chat_ids", lambda token, http=None: [{"id": 777, "name": "Ana", "username": "ana"}])
+    assert d.main() == 0
+    out = capsys.readouterr().out
+    assert "TELEGRAM_CHAT_ID=777" in out and "@ana" in out and TOKEN not in out
+    monkeypatch.setattr(d, "find_chat_ids", lambda token, http=None: [])
+    assert d.main() == 1 and "Iniciar" in capsys.readouterr().out
+    monkeypatch.delenv("TELEGRAM_BOT_TOKEN")
+    assert d.main() == 1 and "TELEGRAM_BOT_TOKEN" in capsys.readouterr().out

@@ -150,13 +150,47 @@ def run_checks(cfg: dict, env=None, online: bool = False, serve: bool = False, h
     return out
 
 
+def find_chat_ids(token: str, http=None) -> list[dict]:
+    """Chats privados que escreveram ao bot (para descobrir o TELEGRAM_CHAT_ID antes de configurá-lo).
+    Só lê; não confirma as atualizações, então o AASIS ainda as recebe depois. Levanta TelegramError (sem o token)."""
+    from .telegram import Telegram
+    ups = Telegram(token, "0", http=http)._get_updates(0)
+    seen: dict[int, dict] = {}
+    for u in ups:
+        chat = (u.get("message") or {}).get("chat") or {}
+        if chat.get("type") == "private" and isinstance(chat.get("id"), int):
+            name = " ".join(x for x in (chat.get("first_name"), chat.get("last_name")) if x)
+            seen[chat["id"]] = {"id": chat["id"], "name": name, "username": chat.get("username", "")}
+    return list(seen.values())
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="Diagnóstico do AASIS")
+    ap.add_argument("--find-chat-id", action="store_true",
+                    help="mostra o seu chat_id do Telegram (envie qualquer mensagem ao bot antes; o AASIS não pode estar rodando)")
     ap.add_argument("--online", action="store_true", help="testa Telegram e monitor de verdade (envia 1 mensagem de teste)")
     ap.add_argument("--serve", action="store_true", help="aplica as exigências do modo nuvem")
     args = ap.parse_args()
     from .config import ROOT, load_config
     cfg = load_config()
+    if args.find_chat_id:
+        from .telegram import TelegramError
+        token = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
+        if not token:
+            print("Defina TELEGRAM_BOT_TOKEN no .env primeiro.")
+            return 1
+        try:
+            found = find_chat_ids(token)
+        except TelegramError as e:
+            print(f"FALHA {e}" + (" (token errado ou o AASIS já está rodando com este bot)" if "401" in str(e) or "409" in str(e) else ""))
+            return 1
+        if not found:
+            print("Nenhuma mensagem encontrada. No Telegram, abra o seu bot, toque em Iniciar (ou envie 'oi') e rode de novo.")
+            return 1
+        for c in found:
+            print(f"TELEGRAM_CHAT_ID={c['id']}   ({c['name'] or 'sem nome'}{', @' + c['username'] if c['username'] else ''})")
+        print("\nCopie a linha do SEU nome para o .env. Se aparecer mais de uma, é porque outras pessoas escreveram ao bot.")
+        return 0
     res = run_checks(cfg, online=args.online, serve=args.serve,
                      env_files=[ROOT / ".env", ROOT / "deploy" / "vps" / ".env"])
     for level, name, detail in res:
