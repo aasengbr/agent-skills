@@ -9,3 +9,7 @@ requests>=2.31
 # E-mail e Agenda
 google-api-python-client>=2.100
 google-auth-oauthlib>=1.2
+
+# Visão de tela
+mss>=9.0
+pillow>=10.0

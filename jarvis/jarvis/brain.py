@@ -45,7 +45,7 @@ class Brain:
             results = []
             for u in uses:
                 out = self.tools.run(u.name, u.input, self.confirm)
-                self.emit("tool", name=u.name, args=u.input, result=out)
+                self.emit("tool", name=u.name, args=u.input, result=out if isinstance(out, str) else "[imagem enviada ao modelo]")
                 results.append({"type": "tool_result", "tool_use_id": u.id, "content": out})
             self.history.append({"role": "user", "content": results})
         return "Limite de etapas atingido sem conclusão."

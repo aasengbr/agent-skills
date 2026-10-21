@@ -37,6 +37,12 @@ Ferramentas: `gmail_search`, `gmail_read`, `gmail_draft` (só rascunho), `calend
 
 `credentials.json` e `token.json` ficam fora do git. O escopo `gmail.compose` do Google também permitiria enviar, mas o código **nunca chama o envio**; só `drafts.create` (coberto por teste).
 
+### Drive
+`drive_search`, `drive_read` (Docs, Planilhas e Apresentações exportados como texto; arquivos de texto) e `drive_create_doc` (cria um Google Doc novo). Escrita só em arquivos criados pelo JARVIS (escopo `drive.file`). **Quem já autorizou o Google antes precisa rodar `python -m jarvis.google_tools` de novo** (novos escopos; o código detecta e reautoriza).
+
+## Visão de tela
+`screen_look`: captura o monitor principal, reduz para `screen.max_side` e envia ao modelo. Exemplos: "O que há na minha tela?", "Explique este erro". **Somente visão: não existe controle de mouse ou teclado.** A imagem sai do PC para a API, por isso pede confirmação a cada uso e pode ser desligada (`screen.enabled: false`). Texto dentro da imagem é tratado como dado não confiável. Requer `mss` e `pillow` (já no `requirements.txt`).
+
 ## Segurança (decisões de projeto)
 - E-mails, agenda e páginas web chegam ao modelo dentro de tags `untrusted` e o prompt do sistema os trata como dado, nunca como instrução (defesa contra prompt injection). É mitigação, não garantia: por isso toda escrita (`gmail_draft`, `calendar_create`, `write_file`, `open_app`) exige sua confirmação.
 - Arquivos: só dentro de `safety.workspace` (bloqueia `../`).
@@ -51,9 +57,10 @@ Ferramentas: `gmail_search`, `gmail_read`, `gmail_draft` (só rascunho), `calend
 | Conversa, memória, arquivos, apps, status do PC, web fetch | Implementado e testado (`pytest tests`) |
 | Voz (wake word, STT, TTS) | Implementado, **não testado em microfone real** (ambiente de build sem áudio/Windows) |
 | E-mail e Agenda | Implementado e testado com serviços simulados (`pytest`). **Não testado contra uma conta Google real** |
-| Drive | **Não implementado** |
+| Drive | Implementado e testado com serviços simulados. **Não testado contra conta real** |
+| Visão de tela | Implementada e testada com captura simulada (confirmação, redução, aviso de dado não confiável). **Captura real (`mss`) não testada** em Windows |
 | Casa inteligente | **Não implementado.** Próximo passo: integrar Home Assistant |
-| Visão de tela / controle de mouse | **Não implementado** (maior risco; fazer por último) |
+| Controle de mouse/teclado | **Não implementado** (decisão deliberada: maior risco) |
 | Interface HUD estilo Iron Man | Implementado e testado (`pytest`, renderização no Chromium sem erros de JS). Não verificado em Windows/Edge |
 
 ## Referências de design

@@ -8,6 +8,8 @@ SCOPES = [
     "https://www.googleapis.com/auth/gmail.readonly",
     "https://www.googleapis.com/auth/gmail.compose",  # usado só para criar rascunhos; o código nunca envia
     "https://www.googleapis.com/auth/calendar.events",
+    "https://www.googleapis.com/auth/drive.readonly",
+    "https://www.googleapis.com/auth/drive.file",  # escrita só em arquivos criados pelo JARVIS
 ]
 
 
@@ -18,6 +20,8 @@ def authorize(credentials: Path, token: Path):
     from google_auth_oauthlib.flow import InstalledAppFlow
 
     creds = Credentials.from_authorized_user_file(str(token), SCOPES) if token.exists() else None
+    if creds and not creds.has_scopes(SCOPES):  # token antigo sem Drive: reautoriza
+        creds = None
     if creds and creds.expired and creds.refresh_token:
         creds.refresh(Request())
     elif not creds or not creds.valid:
@@ -123,8 +127,57 @@ class Google:
         e = self._svc("calendar", "v3").events().insert(calendarId="primary", body=body).execute()
         return f"Evento criado (id {e['id']}): {summary}, {start}"
 
+    # ---------- Drive ----------
+    EXPORT = {
+        "application/vnd.google-apps.document": "text/plain",
+        "application/vnd.google-apps.spreadsheet": "text/csv",
+        "application/vnd.google-apps.presentation": "text/plain",
+    }
+
+    def drive_search(self, query: str, max_results: int = 8) -> str:
+        q = query.replace("\\", "\\\\").replace("'", "\\'")
+        files = self._svc("drive", "v3").files().list(
+            q=f"(name contains '{q}' or fullText contains '{q}') and trashed = false",
+            pageSize=min(int(max_results), 20),
+            fields="files(id,name,mimeType,modifiedTime)",
+            orderBy="modifiedTime desc",
+        ).execute().get("files", [])
+        lines = [f"id={f['id']} | {f['name']} | {f['mimeType']} | {f['modifiedTime']}" for f in files]
+        return _wrap("drive_list", "\n".join(lines) or "Nada encontrado.")
+
+    def drive_read(self, file_id: str) -> str:
+        files = self._svc("drive", "v3").files()
+        meta = files.get(fileId=file_id, fields="name,mimeType").execute()
+        mime = meta["mimeType"]
+        if mime in self.EXPORT:
+            data = files.export(fileId=file_id, mimeType=self.EXPORT[mime]).execute()
+        elif mime.startswith("text/") or mime == "application/json":
+            data = files.get_media(fileId=file_id).execute()
+        else:
+            return f"Tipo não suportado para leitura: {mime}"
+        text = data.decode("utf-8", "replace") if isinstance(data, bytes) else str(data)
+        return _wrap("drive_file", f"Nome: {meta['name']}\n\n{text[:6000]}")
+
+    def drive_create_doc(self, name: str, content: str) -> str:
+        from googleapiclient.http import MediaIoBaseUpload
+        import io
+
+        media = MediaIoBaseUpload(io.BytesIO(content.encode("utf-8")), mimetype="text/plain")
+        f = self._svc("drive", "v3").files().create(
+            body={"name": name, "mimeType": "application/vnd.google-apps.document"},
+            media_body=media,
+            fields="id,webViewLink",
+        ).execute()
+        return f"Documento criado (id {f['id']}): {name}"
+
 
 SCHEMAS = [
+    ("drive_search", "Busca arquivos no Google Drive por nome ou conteúdo.",
+     {"query": "string", "max_results": "integer"}, ["query"]),
+    ("drive_read", "Lê o texto de um arquivo do Drive (Docs, Planilhas, Apresentações, texto) pelo id.",
+     {"file_id": "string"}, ["file_id"]),
+    ("drive_create_doc", "Cria um Google Doc novo com o texto dado.",
+     {"name": "string", "content": "string"}, ["name", "content"]),
     ("gmail_search", "Busca e-mails (sintaxe do Gmail, ex.: is:unread, from:x). Retorna remetente, assunto e id.",
      {"query": "string", "max_results": "integer"}, []),
     ("gmail_read", "Lê o corpo de um e-mail pelo id.", {"message_id": "string"}, ["message_id"]),

@@ -10,10 +10,11 @@ from .config import ROOT
 from .google_tools import SCHEMAS as GOOGLE_SCHEMAS
 from .google_tools import Google
 from .memory import Memory
+from .vision import Screen
 
 
 class Tools:
-    def __init__(self, cfg: dict, memory: Memory, google: Google | None = None):
+    def __init__(self, cfg: dict, memory: Memory, google: Google | None = None, screen: Screen | None = None):
         self.cfg = cfg
         self.memory = memory
         self.workspace = Path(cfg["safety"]["workspace"])
@@ -21,6 +22,7 @@ class Tools:
         self.confirm_tools = set(cfg["safety"]["confirm_tools"])
         google = google or Google(cfg, ROOT)
         self.google = google if google.available else None
+        self.screen = screen or Screen(cfg)
 
     # ---------- segurança ----------
     def _safe_path(self, rel: str) -> Path:
@@ -68,6 +70,9 @@ class Tools:
         subprocess.Popen(cmd, shell=True)  # comando vem só do config.yaml
         return f"Abrindo {name}."
 
+    def screen_look(self) -> list[dict]:
+        return self.screen.look()
+
     def web_fetch(self, url: str) -> str:
         if not url.startswith(("http://", "https://")):
             return "URL inválida."
@@ -100,18 +105,21 @@ class Tools:
             tool("open_app", "Abre um aplicativo permitido.", {"name": s}, ["name"]),
             tool("web_fetch", "Baixa o texto de uma URL http(s).", {"url": s}, ["url"]),
         ]
+        if self.screen.enabled:
+            base.append(tool("screen_look", "Captura e analisa a tela do usuário (somente visão)."))
         if self.google:
             for name, desc, props, req in GOOGLE_SCHEMAS:
                 base.append(tool(name, desc, {k: {"type": v} for k, v in props.items()}, req))
         return base
 
-    def run(self, name: str, args: dict, confirm) -> str:
+    def run(self, name: str, args: dict, confirm) -> str | list:
         if name not in {t["name"] for t in self.schemas()}:
             return f"Ferramenta desconhecida: {name}"
         fn = getattr(self, name, None) or getattr(self.google, name)
         if name in self.confirm_tools and not confirm(f"{name} {args}"):
             return "Ação negada pelo usuário."
         try:
-            return str(fn(**args))
+            out = fn(**args)
+            return out if isinstance(out, list) else str(out)
         except Exception as e:  # devolve o erro ao modelo em vez de quebrar o loop
             return f"Erro em {name}: {e}"

@@ -32,8 +32,15 @@ safety:
     - open_app
     - gmail_draft
     - calendar_create
+    - drive_create_doc
+    - screen_look      # a imagem da tela sai do PC para a API
 
 google:                     # E-mail e Agenda (veja README: credentials.json)
   timezone: America/Sao_Paulo
   credentials_file: credentials.json
   token_file: token.json
+
+screen:                     # visão de tela (somente leitura)
+  enabled: true
+  monitor: 1                # 1 = principal, 0 = todos
+  max_side: 1568            # redimensiona a captura antes de enviar
