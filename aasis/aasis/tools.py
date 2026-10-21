@@ -134,12 +134,14 @@ class Tools:
         lines = [f"[{r['id']}] ({r['kind']}{', ' + r['slot'] if r['slot'] else ''}) {r['content']}" for r in rows]
         return _wrap("memory", "\n".join(lines) or "Nada encontrado.")
 
-    def memory_save(self, content: str, kind: str = "fact", slot: str = "", importance: int = 3) -> str:
+    def memory_save(self, content: str, kind: str = "fact", slot: str = "", importance: int = 3,
+                    keywords: str = "", about: str = "eu") -> str:
         if self.untrusted_turn:  # veio de e-mail/web/notícia neste turno: só vale se o usuário aprovar
             rid = self.memory.mem.save(kind, content, slot=slot or None, importance=importance, source="externo",
-                                       status="pending")
+                                       status="pending", keywords=keywords or None, about=about)
             return f"Memória {rid} ficou PENDENTE (origem externa). Diga ao usuário para aprovar no painel Memória."
-        rid = self.memory.mem.save(kind, content, slot=slot or None, importance=importance)
+        rid = self.memory.mem.save(kind, content, slot=slot or None, importance=importance, keywords=keywords or None,
+                                       about=about)
         return f"Memória {rid} guardada." if self.memory.mem.last_save_new else f"Já sabia disso (memória {rid})."
 
     def memory_search(self, query: str) -> str:
@@ -231,8 +233,10 @@ class Tools:
             tool("system_status", "Uso de CPU, RAM e bateria do PC."),
             tool("memory_save", "Guarda na memória de longo prazo. kind: fact|profile|state|event|preference. Para "
                  "estados que mudam (ex.: onde o carro está) use slot (ex.: car_location): o novo valor substitui o anterior. "
+                 "Em keywords coloque 4 a 8 sinônimos/termos relacionados que ele poderia usar para perguntar isso depois. "
+                 "Em about coloque 'eu' se a memória é sobre o próprio usuário, ou o nome da outra pessoa (ex.: Maria). "
                  "Só guarde o que o USUÁRIO disse; nunca senhas ou cartões.",
-                 {"content": s, "kind": s, "slot": s, "importance": i}, ["content"]),
+                 {"content": s, "kind": s, "slot": s, "importance": i, "keywords": s, "about": s}, ["content"]),
             tool("memory_search", "Busca na memória de longo prazo.", {"query": s}, ["query"]),
             tool("memory_update", "Corrige uma memória pelo id (cria nova versão).", {"id": i, "content": s}, ["id", "content"]),
             tool("memory_forget", "Apaga uma memória pelo id (e as versões antigas). Peça o id com memory_search.",
