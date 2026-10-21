@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>JARVIS HUD</title>
+<style>
+  :root { --c:#00d9ff; --bg:#02080d; --dim:#0a2a36; --txt:#bfefff; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:radial-gradient(circle at 50% 40%, #06202c, var(--bg) 70%); color:var(--txt);
+         font-family:"Consolas","Courier New",monospace; height:100vh; display:grid;
+         grid-template-columns:220px 1fr 280px; grid-template-rows:1fr auto; gap:12px; padding:14px; }
+  .panel { border:1px solid var(--dim); background:rgba(0,217,255,.04); padding:10px; overflow:hidden; }
+  h2 { margin:0 0 8px; font-size:12px; letter-spacing:.2em; color:var(--c); font-weight:normal; }
+  .bar { height:8px; background:var(--dim); margin:4px 0 12px; } .bar i { display:block; height:100%; width:0; background:var(--c); transition:width .6s; }
+  #center { display:flex; flex-direction:column; align-items:center; justify-content:center; }
+  canvas { width:min(60vh,100%); aspect-ratio:1; }
+  #status { margin-top:6px; letter-spacing:.35em; color:var(--c); }
+  #log { font-size:12px; overflow-y:auto; height:calc(100% - 24px); }
+  #log div { margin-bottom:8px; border-left:2px solid var(--c); padding-left:6px; word-break:break-word; }
+  #bottom { grid-column:1 / 4; display:flex; flex-direction:column; gap:8px; }
+  #transcript { min-height:48px; max-height:110px; overflow-y:auto; font-size:14px; }
+  #transcript .you { color:#7aa; } #transcript .bot { color:var(--txt); }
+  form { display:flex; gap:8px; }
+  input { flex:1; background:transparent; border:1px solid var(--c); color:var(--txt); padding:10px; font:inherit; }
+  button { background:var(--c); color:#001018; border:0; padding:0 18px; font:inherit; cursor:pointer; }
+  #modal { display:none; position:fixed; inset:0; background:rgba(0,0,0,.75); align-items:center; justify-content:center; }
+  #modal.on { display:flex; } #modal .box { border:1px solid #ffb300; background:#120d00; padding:24px; max-width:520px; }
+  #modal p { color:#ffb300; word-break:break-word; } #modal button + button { background:#444; color:#fff; margin-left:8px; }
+  @media (max-width:800px){ body{grid-template-columns:1fr; height:auto;} #bottom{grid-column:1;} }
+</style>
+</head>
+<body>
+<div class="panel"><h2>SISTEMA</h2>
+  CPU <span id="cpuv">--</span>%<div class="bar"><i id="cpu"></i></div>
+  RAM <span id="ramv">--</span>%<div class="bar"><i id="ram"></i></div>
+  <h2>LINK</h2><span id="link">OFFLINE</span>
+</div>
+<div class="panel" id="center"><canvas id="reactor" width="600" height="600"></canvas><div id="status">STANDBY</div></div>
+<div class="panel"><h2>FERRAMENTAS</h2><div id="log"></div></div>
+<div class="panel" id="bottom">
+  <div id="transcript"></div>
+  <form id="f"><input id="q" autocomplete="off" placeholder="Digite um comando para o JARVIS..."><button>ENVIAR</button></form>
+</div>
+<div id="modal"><div class="box"><h2>CONFIRMAÇÃO NECESSÁRIA</h2><p id="act"></p>
+  <button id="yes">AUTORIZAR</button><button id="no">NEGAR</button></div></div>
+<script>
+const TOKEN = "__TOKEN__";
+const COLORS = {standby:"#00d9ff", listening:"#ffb300", thinking:"#ffffff", speaking:"#3dff9a"};
+let state = "standby", t = 0;
+const $ = id => document.getElementById(id);
+const post = (path, body) => fetch(path, {method:"POST", headers:{"X-Token":TOKEN,"Content-Type":"application/json"}, body:JSON.stringify(body)});
+
+function setState(s) { state = s; $("status").textContent = s.toUpperCase(); $("status").style.color = COLORS[s] || COLORS.standby; }
+function addLine(cls, who, text) {
+  const d = document.createElement("div"); d.className = cls; d.textContent = who + ": " + text;
+  $("transcript").appendChild(d); $("transcript").scrollTop = 1e9;
+}
+function addTool(name, args, result) {
+  const d = document.createElement("div");
+  d.textContent = name + " " + JSON.stringify(args) + (result ? " → " + String(result).slice(0,160) : "");
+  $("log").prepend(d);
+}
+
+const es = new EventSource("/events?token=" + TOKEN);
+es.onopen = () => $("link").textContent = "ONLINE";
+es.onerror = () => $("link").textContent = "OFFLINE";
+es.onmessage = e => {
+  const m = JSON.parse(e.data);
+  if (m.type === "state") setState(m.state);
+  else if (m.type === "user") addLine("you", "Você", m.text);
+  else if (m.type === "assistant") addLine("bot", "JARVIS", m.text);
+  else if (m.type === "tool") addTool(m.name, m.args, m.result);
+  else if (m.type === "stats") { $("cpu").style.width = m.cpu + "%"; $("ram").style.width = m.ram + "%";
+    $("cpuv").textContent = Math.round(m.cpu); $("ramv").textContent = Math.round(m.ram); }
+  else if (m.type === "confirm") { $("act").textContent = m.action; $("modal").classList.add("on"); }
+};
+$("f").onsubmit = ev => { ev.preventDefault(); const v = $("q").value.trim(); if (!v) return; $("q").value = ""; post("/ask", {text:v}); };
+const answer = ok => { $("modal").classList.remove("on"); post("/confirm", {ok}); };
+$("yes").onclick = () => answer(true); $("no").onclick = () => answer(false);
+
+// Reator de arco animado
+const cv = $("reactor"), g = cv.getContext("2d");
+function ring(r, w, segs, gap, rot, color, alpha) {
+  g.strokeStyle = color; g.globalAlpha = alpha; g.lineWidth = w;
+  const step = Math.PI * 2 / segs;
+  for (let i = 0; i < segs; i++) { g.beginPath(); g.arc(300, 300, r, rot + i*step, rot + (i+1)*step - gap); g.stroke(); }
+}
+function draw() {
+  t += state === "thinking" ? 0.035 : state === "listening" ? 0.02 : 0.008;
+  const col = COLORS[state] || COLORS.standby, pulse = 1 + Math.sin(t * (state === "speaking" ? 18 : 4)) * (state === "speaking" ? .06 : .02);
+  g.clearRect(0, 0, 600, 600);
+  ring(270, 3, 60, .04, t, col, .35);
+  ring(235, 6, 3, .35, -t * 1.6, col, .7);
+  ring(195, 2, 24, .1, t * 2.2, col, .5);
+  ring(150 * pulse, 10, 9, .25, -t * 3, col, .9);
+  const grad = g.createRadialGradient(300, 300, 5, 300, 300, 95 * pulse);
+  grad.addColorStop(0, "#fff"); grad.addColorStop(.35, col); grad.addColorStop(1, "transparent");
+  g.globalAlpha = 1; g.fillStyle = grad; g.beginPath(); g.arc(300, 300, 95 * pulse, 0, 7); g.fill();
+  requestAnimationFrame(draw);
+}
+draw();
+</script>
+</body>
+</html>
