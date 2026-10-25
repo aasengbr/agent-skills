@@ -164,6 +164,15 @@ def find_chat_ids(token: str, http=None) -> list[dict]:
     return list(seen.values())
 
 
+def print_report(res, out=print) -> int:
+    """Imprime o relatório; devolve 1 se houver FALHA (código de saída)."""
+    for level, name, detail in res:
+        out(f"{level:<6} {name}" + (f" — {detail}" if detail else ""))
+    bad = sum(1 for r in res if r[0] == FAIL)
+    out(f"\n{sum(1 for r in res if r[0] == OK)} ok, {sum(1 for r in res if r[0] == WARN)} aviso(s), {bad} falha(s)")
+    return 1 if bad else 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="Diagnóstico do AASIS")
     ap.add_argument("--find-chat-id", action="store_true",
@@ -193,11 +202,7 @@ def main() -> int:
         return 0
     res = run_checks(cfg, online=args.online, serve=args.serve,
                      env_files=[ROOT / ".env", ROOT / "deploy" / "vps" / ".env"])
-    for level, name, detail in res:
-        print(f"{level:<6} {name}" + (f" — {detail}" if detail else ""))
-    bad = sum(1 for r in res if r[0] == FAIL)
-    print(f"\n{sum(1 for r in res if r[0] == OK)} ok, {sum(1 for r in res if r[0] == WARN)} aviso(s), {bad} falha(s)")
-    return 1 if bad else 0
+    return print_report(res)
 
 
 if __name__ == "__main__":
