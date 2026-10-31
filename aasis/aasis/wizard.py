@@ -79,8 +79,10 @@ def main(argv=None, ask=input, ask_secret=getpass.getpass, http=None, env_path: 
     out("Assistente de configuração do AASIS.\n"
         "Ao colar uma chave ou token, NADA aparece na tela (é proposital, por segurança): cole (botão direito ou Ctrl+V) e aperte Enter.\n")
 
-    # 1) Chave da Anthropic
-    if is_set(cur.get("ANTHROPIC_API_KEY")) and ask("ANTHROPIC_API_KEY já está definida. Trocar? (s/N) ").strip().lower() not in ("s", "sim"):
+    # 1) Chave da Anthropic (variável de ambiente do sistema também vale: ela tem prioridade sobre o .env)
+    if not is_set(cur.get("ANTHROPIC_API_KEY")) and is_set(os.environ.get("ANTHROPIC_API_KEY")):
+        out("ANTHROPIC_API_KEY já está definida no ambiente do sistema. Mantida (não será gravada no .env).")
+    elif is_set(cur.get("ANTHROPIC_API_KEY")) and ask("ANTHROPIC_API_KEY já está definida. Trocar? (s/N) ").strip().lower() not in ("s", "sim"):
         out("  Mantida.")
     else:
         key = ask_secret_value("Chave da Anthropic (começa com sk-ant-)", ask_secret, out,
@@ -94,7 +96,10 @@ def main(argv=None, ask=input, ask_secret=getpass.getpass, http=None, env_path: 
 
     # 2) Telegram
     http_obj = http
-    if is_set(cur.get("TELEGRAM_BOT_TOKEN")) and ask("TELEGRAM_BOT_TOKEN já está definido. Trocar? (s/N) ").strip().lower() not in ("s", "sim"):
+    if not is_set(cur.get("TELEGRAM_BOT_TOKEN")) and is_set(os.environ.get("TELEGRAM_BOT_TOKEN")):
+        cur["TELEGRAM_BOT_TOKEN"] = os.environ["TELEGRAM_BOT_TOKEN"]
+        out("TELEGRAM_BOT_TOKEN já está definido no ambiente do sistema. Mantido.")
+    elif is_set(cur.get("TELEGRAM_BOT_TOKEN")) and ask("TELEGRAM_BOT_TOKEN já está definido. Trocar? (s/N) ").strip().lower() not in ("s", "sim"):
         out("  Token mantido.")
     elif ask("\nConfigurar o Telegram agora (alertas de lembrete e remédio no celular)? (S/n) ").strip().lower() not in ("n", "nao", "não"):
         def check_token(v):

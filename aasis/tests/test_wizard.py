@@ -205,3 +205,24 @@ def test_write_env_updates_commented_and_missing_keys_without_duplicates():
 def test_placeholder_from_env_example_counts_as_not_set():
     assert not wizard.is_set("sk-ant-...") and not wizard.is_set("") and not wizard.is_set(None)
     assert wizard.is_set("sk-ant-real-1234")
+
+
+def test_key_already_in_system_environment_is_not_asked_nor_written(monkeypatch):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", KEY)
+    with tempfile.TemporaryDirectory() as tmp:
+        s = Script(answers=["n"])                                              # só "Configurar o Telegram?" -> não
+        assert run(tmp, s, TgHttp()) == 0                                      # ask_secret não é chamado (o Script falharia)
+        assert "ambiente do sistema" in s.text() and KEY not in s.text()
+        assert "ANTHROPIC_API_KEY=sk-ant-SEGREDO" not in (Path(tmp) / ".env").read_text(encoding="utf-8")
+
+
+def test_telegram_token_in_system_environment_skips_the_prompt_and_finds_chat(monkeypatch):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", KEY)
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", TOKEN)
+    with tempfile.TemporaryDirectory() as tmp:
+        http = TgHttp()
+        http.updates = [private_update()]
+        s = Script()
+        assert run(tmp, s, http) == 0
+        assert "TELEGRAM_BOT_TOKEN já está definido no ambiente" in s.text() and TOKEN not in s.text()
+        assert wizard.read_env(Path(tmp) / ".env")["TELEGRAM_CHAT_ID"] == "777"
