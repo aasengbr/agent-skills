@@ -45,8 +45,8 @@ docker compose exec aasis python -m aasis.doctor --serve --online
 - Depois, no HUD (`https://SEU-DOMINIO`): painel **Modelos > testar** (é o único teste real da API de IA).
 
 ## D. Teste de aceitação (3 dias, com remédio **fictício**)
-Cadastre pelo Telegram: "cadastre Vitamina Teste 1 comprimido às HH:MM e HH:MM, tenho 6 comprimidos" (horários
-próximos, escolha 2).
+Cadastre pelo Telegram, **sem IA**: `/remedio Vitamina_Teste 1cp HH:MM,HH:MM estoque=6` (horários próximos, escolha 2) e
+confirme com **Sim**. Depois use `/tomei Vitamina_Teste`, `/remedios`, `/estoque` e `/remover` (veja [`telegram-meds.md`](telegram-meds.md)).
 
 | # | Teste | Passa quando |
 |---|---|---|

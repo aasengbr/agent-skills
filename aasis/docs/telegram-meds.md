@@ -43,8 +43,26 @@ heartbeat:
   interval_s: 300
 ```
 
+## 3.1 Comandos diretos (sem IA)
+O cadastro e o controle dos remédios **não precisam de nenhuma IA**: são comandos de texto no Telegram, determinísticos. Nada
+do que você escreve neles vai a provedor de IA algum, e funcionam **mesmo sem chave da Anthropic** (ou de qualquer provedor).
+
+| Comando | O que faz |
+|---|---|
+| `/remedio Losartana 50mg 08:00,20:00 estoque=30` | Cadastra. Mostra o que entendeu e **pede Sim/Não** antes de gravar |
+| `/remedios` | Lista os remédios e as doses de hoje |
+| `/tomei Losartana` | Registra a dose tomada (também aceita o número do remédio) |
+| `/estoque Losartana 12` | Atualiza o estoque |
+| `/remover Losartana` | Para os avisos (pede Sim/Não; o histórico fica) |
+| `/ajuda` | Lista os comandos |
+
+Regras do `/remedio`: nome e dose são **uma palavra cada**; use `_` no lugar de espaço (`Vitamina_D 1000_UI`). Opções:
+`estoque=30`, `dias=seg,qua,sex` (ou nomes completos), `inicio=2026-12-01`, `fim=2026-12-31`, `por_dose=2` (aceita `0,5`).
+Dose e horários são guardados **exatamente como você escrever**; o AASIS não sugere nada. Erros de digitação (horário
+`25:00`, data inválida, opção desconhecida) são explicados sem pedir confirmação. O AASIS só aceita comandos do **seu** chat.
+
 ## 4. Como usar
-- Converse normalmente: "cadastre Losartana 50 mg às 8h e 20h, tenho 30 comprimidos", "tomei o losartana",
+- Pelos comandos acima (sem IA), ou conversando (exige IA com permissão para dado de saúde, ex.: Anthropic): "cadastre Losartana 50 mg às 8h e 20h, tenho 30 comprimidos", "tomei o losartana",
   "o que falta tomar hoje?", "atualize o estoque do losartana para 12", "remova a Metformina".
 - Cadastrar e remover **pedem confirmação** (botões Sim/Não no próprio Telegram, com o conteúdo exato).
 - "Tomei" dá baixa de estoque **uma vez** (tocar duas vezes não duplica). Dose perdida ainda pode ser registrada em até

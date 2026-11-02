@@ -34,6 +34,10 @@ def test_parse_times_and_days():
     assert parse_days("Seg, qua,SÁB") == [0, 2, 5]
     with pytest.raises(ValueError):
         parse_days("segunda-feira, xyz")
+    assert parse_days("segunda-feira, Terça, quarta-feira, sábado, domingo") == [0, 1, 2, 5, 6]
+    for bad in ("segredo", "sext", "seg1", "quintal"):                  # só palavras exatas
+        with pytest.raises(ValueError):
+            parse_days(bad)
 
 
 def test_add_validation():

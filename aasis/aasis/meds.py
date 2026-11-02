@@ -32,8 +32,12 @@ def parse_times(times: str) -> list[str]:
     return sorted(out)
 
 
+FULL_DAYS = {"segunda": 0, "terca": 1, "quarta": 2, "quinta": 3, "sexta": 4, "sabado": 5, "domingo": 6}
+
+
 def parse_days(days: str) -> list[int]:
-    """'' ou 'todos' = todos os dias. Aceita seg,ter,qua,qui,sex,sab,dom (com ou sem acento)."""
+    """'' ou 'todos' = todos os dias. Aceita seg,ter,qua,qui,sex,sab,dom ou o nome completo (segunda, terça-feira...),
+    com ou sem acento. Só palavras exatas: 'segredo' não vira segunda-feira."""
     d = _norm(days)
     if d in ("", "todos", "todo dia", "diario", "diariamente"):
         return []
@@ -41,9 +45,13 @@ def parse_days(days: str) -> list[int]:
     for tok in re.split(r"[,;\s]+", d):
         if not tok:
             continue
-        if tok[:3] not in DAYS:
-            raise ValueError(f"Dia inválido: {tok!r}. Use seg,ter,qua,qui,sex,sab,dom ou 'todos'.")
-        out.add(DAYS.index(tok[:3]))
+        name = tok.removesuffix("-feira")
+        if name in DAYS:
+            out.add(DAYS.index(name))
+        elif name in FULL_DAYS:
+            out.add(FULL_DAYS[name])
+        else:
+            raise ValueError(f"Dia inválido: {tok!r}. Use seg,ter,qua,qui,sex,sab,dom (ou o nome do dia) ou 'todos'.")
     return sorted(out)
 
 
@@ -74,16 +82,20 @@ class Meds:
     def _now(self) -> dt.datetime:
         return dt.datetime.now(dt.timezone.utc)
 
-    def add(self, name: str, dose: str, times: str, days: str = "", start: str = "", end: str = "",
-            stock: float | None = None, per_dose: float = 1, now: dt.datetime | None = None) -> int:
+    def validate(self, name: str, dose: str, times: str, days: str = "", start: str = "", end: str = "",
+                 stock: float | None = None, per_dose: float = 1) -> dict:
+        """Confere e normaliza os dados SEM gravar (levanta ValueError em português). Usado por add() e pelos comandos."""
         name, dose = name.strip()[:80], dose.strip()[:80]
         if not name or not dose:
             raise ValueError("Informe o nome e a dose exatamente como o médico prescreveu.")
         tl, dl = parse_times(times), parse_days(days)
-        if start:
-            dt.date.fromisoformat(start)
-        if end:
-            dt.date.fromisoformat(end)
+        try:
+            if start:
+                dt.date.fromisoformat(start)
+            if end:
+                dt.date.fromisoformat(end)
+        except ValueError:
+            raise ValueError("Data inválida: use AAAA-MM-DD (ex.: 2026-12-31).") from None
         if start and end and end < start:
             raise ValueError("A data final é anterior à inicial.")
         if per_dose is None or not 0 < float(per_dose) <= 20:
@@ -92,12 +104,18 @@ class Meds:
             raise ValueError("Estoque não pode ser negativo.")
         if self.db.execute("SELECT COUNT(*) FROM meds WHERE active = 1").fetchone()[0] >= MAX_MEDS:
             raise ValueError(f"Limite de {MAX_MEDS} remédios ativos.")
+        return {"name": name, "dose": dose, "times": tl, "days": dl, "start": start or None, "end": end or None,
+                "stock": None if stock is None else float(stock), "per_dose": float(per_dose)}
+
+    def add(self, name: str, dose: str, times: str, days: str = "", start: str = "", end: str = "",
+            stock: float | None = None, per_dose: float = 1, now: dt.datetime | None = None) -> int:
+        v = self.validate(name, dose, times, days, start, end, stock, per_dose)
         now = now or self._now()
         with self._lock:
             cur = self.db.execute(
                 "INSERT INTO meds(name, dose, times, days, start, end, stock, per_dose, created_utc) VALUES (?,?,?,?,?,?,?,?,?)",
-                (name, dose, json.dumps(tl), json.dumps(dl), start or None, end or None,
-                 None if stock is None else float(stock), float(per_dose), now.strftime(UTC_FMT)))
+                (v["name"], v["dose"], json.dumps(v["times"]), json.dumps(v["days"]), v["start"], v["end"], v["stock"],
+                 v["per_dose"], now.strftime(UTC_FMT)))
             self.db.commit()
             return cur.lastrowid
 
@@ -282,22 +300,38 @@ class Meds:
             self.db.commit()
         return f" Restam {fmt_stock(new)} no estoque." if new > 0 else " O estoque acabou."
 
-    def taken_by_name(self, name: str, now: dt.datetime | None = None) -> str:
-        """'Tomei o X': registra a dose mais recente ainda em aberto (pendente ou perdida nas últimas 12 h)."""
-        now = now or self._now()
-        found = self.find(name)
+    def resolve(self, ref: str) -> tuple[dict | None, str]:
+        """Acha UM remédio ativo por número (id) ou nome (o nome exato vence; senão tem de ser único). (remédio, erro)."""
+        ref = ref.strip()
+        if ref.isdigit():
+            med = self.get(int(ref))
+            return (med, "") if med else (None, f"Não há remédio ativo com o número {ref}.")
+        found = self.find(ref)
+        exact = [m for m in found if _norm(m["name"]) == _norm(ref)]
+        if len(exact) == 1:
+            return exact[0], ""
         if not found:
-            return f"Não há remédio ativo com o nome '{name}'."
+            return None, f"Não há remédio ativo com o nome '{ref}'."
         if len(found) > 1:
-            return "Mais de um remédio combina: " + "; ".join(f"{m['id']} {m['name']}" for m in found) + ". Diga qual."
+            return None, "Mais de um remédio combina: " + "; ".join(f"{m['id']} {m['name']}" for m in found) + ". Diga qual (nome completo ou número)."
+        return found[0], ""
+
+    def taken_for(self, med: dict, now: dt.datetime | None = None) -> str:
+        """Registra a dose mais recente ainda em aberto (pendente ou perdida nas últimas 12 h) deste remédio."""
+        now = now or self._now()
         since = (now - dt.timedelta(hours=12)).strftime(UTC_FMT)
         with self._lock:
             r = self.db.execute("SELECT id FROM doses WHERE med_id = ? AND state IN ('pending','missed') AND due_utc <= ? "
                                 "AND due_utc >= ? ORDER BY due_utc DESC LIMIT 1",
-                                (found[0]["id"], now.strftime(UTC_FMT), since)).fetchone()
+                                (med["id"], now.strftime(UTC_FMT), since)).fetchone()
         if not r:
-            return f"Nenhuma dose em aberto de {found[0]['name']} nas últimas 12 h; nada foi registrado."
+            return f"Nenhuma dose em aberto de {med['name']} nas últimas 12 h; nada foi registrado."
         return self.act(r[0], "taken", now)
+
+    def taken_by_name(self, name: str, now: dt.datetime | None = None) -> str:
+        """'Tomei o X' (pela conversa com a IA)."""
+        med, err = self.resolve(name)
+        return err if err else self.taken_for(med, now)
 
     # ---------- consultas ----------
     def today(self, now: dt.datetime | None = None) -> list[dict]:

@@ -8,6 +8,7 @@ import webbrowser
 from zoneinfo import ZoneInfo
 
 from .backup import start_backup_loop
+from . import commands
 from .brain import Brain
 from .config import data_dir, load_config
 from .google_tools import WebAuth
@@ -131,7 +132,11 @@ def main() -> None:
             return tools.meds.act(int(ident), {"t": "taken", "z": "snooze", "s": "skipped"}[act])
         return ""
 
-    tg = telegram_from_env(cfg, data_dir(), on_text=tg_text, on_action=tg_action)
+    def tg_command(text: str) -> str:
+        """Comandos de remédio (/remedio, /tomei...): determinísticos, sem IA; pedem confirmação pelos botões do Telegram."""
+        return commands.handle(text, tools.meds, tg.confirm, audit=lambda name, status: memory.log_action(name, {}, status))
+
+    tg = telegram_from_env(cfg, data_dir(), on_text=tg_text, on_action=tg_action, on_command=tg_command)
     detail = cfg.get("telegram", {}).get("detail", "full")  # full | minimal (sem nome do remédio no Telegram)
 
     if args.hud or args.allow_host:

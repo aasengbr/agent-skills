@@ -27,14 +27,14 @@ class TelegramError(Exception):
 
 
 class Telegram:
-    def __init__(self, token: str, chat_id: int | str, http=None, on_text=None, on_action=None,
+    def __init__(self, token: str, chat_id: int | str, http=None, on_text=None, on_action=None, on_command=None,
                  state_file: Path | None = None, api: str = API, poll_timeout: int = 25):
         if not token or not str(chat_id).lstrip("-").isdigit():
             raise ValueError("Telegram exige token e chat_id numérico.")
         self.token, self.chat_id = token, int(chat_id)
         self.http = http or requests.Session()
         self.poll_http = http or requests.Session()  # sessão própria: o long polling não trava os envios
-        self.on_text, self.on_action = on_text, on_action
+        self.on_text, self.on_action, self.on_command = on_text, on_action, on_command
         self.state_file, self.api, self.poll_timeout = state_file, api, poll_timeout
         self.offset = self._load_offset()
         self._pending: dict[str, dict] = {}
@@ -158,15 +158,20 @@ class Telegram:
         if not text:
             self._safe_send("Por enquanto só entendo mensagens de texto.")
             return
-        if text.split()[0].lower() in ("/start", "/ajuda", "/help"):
-            self._safe_send("AASIS online. Escreva normalmente: lembretes, agenda, remédios ('tomei o losartana'), etc.")
-            return
+        if text.startswith("/"):                       # comando: nunca vai para a IA
+            cmd = text.split()[0].lower().split("@")[0]
+            if cmd == "/start" or (not self.on_command and cmd in ("/ajuda", "/help")):
+                self._safe_send("AASIS online. Escreva normalmente (lembretes, agenda...) ou envie /ajuda para os comandos de remédio.")
+                return
+            if self.on_command:
+                threading.Thread(target=self._text_worker, args=(text[:MAX_IN], self.on_command), daemon=True).start()
+                return
         if self.on_text:
-            threading.Thread(target=self._text_worker, args=(text[:MAX_IN],), daemon=True).start()
+            threading.Thread(target=self._text_worker, args=(text[:MAX_IN], self.on_text), daemon=True).start()
 
-    def _text_worker(self, text: str) -> None:
+    def _text_worker(self, text: str, handler) -> None:
         try:
-            reply = self.on_text(text)
+            reply = handler(text)
         except Exception as e:
             reply = f"Falha ao processar ({type(e).__name__})."
         if reply:

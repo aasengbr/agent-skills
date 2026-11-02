@@ -46,7 +46,9 @@ O Telegram só faz conexões de **saída**: não precisa de domínio, IP fixo ne
 3. **Rodar:** `python -m aasis.main --text --hud`. O celular recebe "AASIS online". Mantenha o terminal aberto.
 4. **Deixar o notebook acordado durante o teste:** Configurações > Sistema > Energia > Suspensão = **Nunca** (na tomada), e
    deixe-o ligado na tomada. Notebook suspenso não avisa remédio.
-5. **Teste de aceitação:** itens 1 a 6, 8 e 9 da tabela de [`deploy-checklist.md`](deploy-checklist.md) (use remédio **fictício**).
+5. **Remédio sem IA:** no Telegram, `/ajuda` e `/remedio Vitamina_Teste 1cp HH:MM estoque=6` (HH:MM = daqui a 2 minutos; confirme
+   com **Sim**). Funciona **mesmo sem chave da Anthropic**: os comandos não usam nenhum modelo de linguagem.
+6. **Teste de aceitação:** itens 1 a 6, 8 e 9 da tabela de [`deploy-checklist.md`](deploy-checklist.md) (use remédio **fictício**).
    Os itens 7 (derrubar o servidor) e 10 (backup) só se aplicam ao VPS.
 
 Sem o assistente (manual): edite o `.env` (`notepad .env`), rode `python -m aasis.doctor --find-chat-id` para o chat_id e
