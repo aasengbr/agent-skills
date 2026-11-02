@@ -16,6 +16,11 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 OK, WARN, FAIL = "OK", "AVISO", "FALHA"
+def _is_real(v) -> bool:
+    """Valor de verdade, não o exemplo do env.example (que traz 'sk-ant-...')."""
+    return bool(v) and "..." not in v and v.strip() not in ("", "x")
+
+
 TOKEN_RE = re.compile(r"^\d{5,}:[A-Za-z0-9_-]{30,}$")
 
 
@@ -72,7 +77,7 @@ def run_checks(cfg: dict, env=None, online: bool = False, serve: bool = False, h
     providers, usable, trusted_ok = cfg.get("llm", {}).get("providers", {}), [], False
     for name, p in providers.items():
         key_env = p.get("key_env", "ANTHROPIC_API_KEY" if p.get("type") == "anthropic" else "")
-        if key_env and env.get(key_env):
+        if key_env and _is_real(env.get(key_env)):
             usable.append(name)
             trusted_ok |= p.get("trust") in ("trusted", "local")
     if usable:

@@ -146,7 +146,7 @@ def main(argv=None, ask=input, ask_secret=getpass.getpass, http=None, env_path: 
     out("\nDiagnóstico (envia 1 mensagem de teste ao Telegram, se configurado):\n")
     from .config import load_config
     cfg = load_config()
-    res = run_checks(cfg, env={**os.environ, **cur}, online=True, serve=False, http=http_obj, env_files=[env_path])
+    res = run_checks(cfg, env={**cur, **os.environ}, online=True, serve=False, http=http_obj, env_files=[env_path])
     code = print_report(res, out)
     if code == 0:
         out("\nPronto. Para iniciar o AASIS:  python -m aasis.main --text --hud")

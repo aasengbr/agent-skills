@@ -220,3 +220,15 @@ def test_find_chat_id_command_prints_the_env_line(monkeypatch, capsys):
     assert d.main() == 1 and "Iniciar" in capsys.readouterr().out
     monkeypatch.delenv("TELEGRAM_BOT_TOKEN")
     assert d.main() == 1 and "TELEGRAM_BOT_TOKEN" in capsys.readouterr().out
+
+
+def test_example_placeholder_is_not_a_real_key():
+    """O .env copiado do env.example traz 'sk-ant-...': não pode contar como chave (achado no notebook do usuário)."""
+    with tempfile.TemporaryDirectory() as tmp:
+        res = check({**GOOD, "ANTHROPIC_API_KEY": "sk-ant-..."}, tmp)
+        assert levels(res)["Provedores de IA com chave"] == FAIL
+        res = check({**GOOD, "ANTHROPIC_API_KEY": "sk-ant-...", "OPENROUTER_API_KEY": "sk-or-real-123"}, tmp)
+        lv = levels(res)
+        assert lv["Provedores de IA com chave"] == OK and lv["Provedor para dados sensíveis"] == FAIL   # só externo: sem saúde/finanças
+        assert "anthropic" not in dict((n, d) for _, n, d in res)["Provedores de IA com chave"]
+        assert levels(check(GOOD, tmp))["Provedor para dados sensíveis"] == OK
