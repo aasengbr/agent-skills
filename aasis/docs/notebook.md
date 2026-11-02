@@ -33,6 +33,27 @@ python -m aasis.main --hud
 O Windows pode precisar de uma **voz em português** instalada (Configurações > Hora e idioma > Fala). O microfone é pedido na
 primeira vez. Não testado: as bibliotecas de voz podem exigir passos extras no Windows.
 
+## Teste com Telegram e remédios (recomendado antes de contratar servidor)
+O Telegram só faz conexões de **saída**: não precisa de domínio, IP fixo nem abrir porta no roteador.
+1. **Telegram (celular):** @BotFather > `/newbot` > guarde o token. Abra o seu bot e toque em **Iniciar**.
+2. **Assistente de configuração** (no PowerShell, dentro da pasta `agent-skills\aasis`):
+   ```
+   python -m aasis.wizard
+   ```
+   Ele pergunta a chave da Anthropic e o token do bot **com a digitação oculta** (ao colar, nada aparece: é normal; aperte Enter),
+   grava o `.env` no formato certo, descobre o seu `chat_id` e roda o diagnóstico (chega uma mensagem de teste no celular).
+   Pode repetir quando quiser: o que já está certo é mantido.
+3. **Rodar:** `python -m aasis.main --text --hud`. O celular recebe "AASIS online". Mantenha o terminal aberto.
+4. **Deixar o notebook acordado durante o teste:** Configurações > Sistema > Energia > Suspensão = **Nunca** (na tomada), e
+   deixe-o ligado na tomada. Notebook suspenso não avisa remédio.
+5. **Remédio sem IA:** no Telegram, `/ajuda` e `/remedio Vitamina_Teste 1cp HH:MM estoque=6` (HH:MM = daqui a 2 minutos; confirme
+   com **Sim**). Funciona **mesmo sem chave da Anthropic**: os comandos não usam nenhum modelo de linguagem.
+6. **Teste de aceitação:** itens 1 a 6, 8 e 9 da tabela de [`deploy-checklist.md`](deploy-checklist.md) (use remédio **fictício**).
+   Os itens 7 (derrubar o servidor) e 10 (backup) só se aplicam ao VPS.
+
+Sem o assistente (manual): edite o `.env` (`notepad .env`), rode `python -m aasis.doctor --find-chat-id` para o chat_id e
+`python -m aasis.doctor --online` para o diagnóstico.
+
 ## Celular acessando o notebook
 Use o Tailscale (instalado no notebook e no celular) e siga a "Opção A" do README. Só funciona com o notebook ligado.
 
