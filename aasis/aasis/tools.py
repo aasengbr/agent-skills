@@ -13,6 +13,7 @@ from .google_tools import Google, _wrap
 from .home import SCHEMAS as HOME_SCHEMAS
 from .home import Home
 from .memory import Memory
+from .meds import Meds
 from .vision import Screen
 from .llm.privacy import SECRET, SENSITIVE, classify, tool_level
 from .world import World
@@ -31,6 +32,9 @@ class Tools:
         self.google = google or Google(cfg, data_dir())  # disponibilidade checada a cada uso (login pelo HUD)
         self.screen = screen or Screen(cfg)
         self.world = World(http or requests.Session(), self.tz)
+        mc = cfg.get("meds", {})
+        self.meds = Meds(memory, self.tz, int(mc.get("missed_after_min", 180)), int(mc.get("resend_s", 300)),
+                         int(mc.get("max_attempts", 6)), int(mc.get("low_stock_days", 5)))
         self.untrusted_turn = False  # o Brain liga quando o turno leu e-mail, web, notícias... (memória vira pendente)
         self.web_search_disabled = False  # ligado pelo cérebro se a API recusar a busca (400)
         home = home or Home(cfg)
@@ -103,6 +107,31 @@ class Tools:
     def reminder_cancel(self, id: int) -> str:
         return "Lembrete cancelado." if self.memory.cancel_reminder(int(id)) else "Lembrete não encontrado."
 
+    # ---------- remédios (veja meds.py; o AASIS não é dispositivo médico) ----------
+    def med_add(self, name: str, dose: str, times: str, days: str = "", start: str = "", end: str = "",
+                stock: float | None = None, per_dose: float = 1) -> str:
+        mid = self.meds.add(name, dose, times, days, start, end, stock, per_dose)
+        return f"Remédio {mid} cadastrado: {self.meds.describe(self.meds.get(mid))}"
+
+    def med_list(self) -> str:
+        meds = self.meds.active_meds()
+        lines = [self.meds.describe(m) for m in meds] or ["Nenhum remédio cadastrado."]
+        today = self.meds.today()
+        if today:
+            lines.append("Hoje: " + "; ".join(
+                f"{dt.datetime.strptime(d['due_utc'], self.UTC_FMT).replace(tzinfo=dt.timezone.utc).astimezone(self.tz):%H:%M} "
+                f"{d['name']} ({self.meds._state_pt(d['state'])})" for d in today))
+        return _wrap("meds", "\n".join(lines))
+
+    def med_taken(self, name: str) -> str:
+        return self.meds.taken_by_name(name)
+
+    def med_stock(self, id: int, stock: float) -> str:
+        return "Estoque atualizado." if self.meds.set_stock(int(id), float(stock)) else "Remédio não encontrado."
+
+    def med_remove(self, id: int) -> str:
+        return "Remédio removido (o histórico de doses foi mantido)." if self.meds.remove(int(id)) else "Remédio não encontrado."
+
     # ---------- resumo do dia ----------
     def daily_brief(self) -> str:
         parts = [f"Agora: {self.now_str()}"]
@@ -119,6 +148,8 @@ class Tools:
             parts.append("## Google\n(não conectado: agenda e e-mail fora do resumo)")
         parts.append("## Tarefas pendentes\n" + self.task_list())
         parts.append("## Lembretes pendentes\n" + self.reminder_list())
+        if self.meds.active_meds():
+            parts.append("## Remédios\n" + self.med_list())
         return "\n\n".join(parts)
 
     def system_status(self) -> str:
@@ -255,6 +286,16 @@ class Tools:
                  "ex.: 2026-10-22T09:00:00).", {"text": s, "when": s, "in_minutes": i}, ["text"]),
             tool("reminder_list", "Lista lembretes pendentes."),
             tool("reminder_cancel", "Cancela lembrete pelo id.", {"id": i}, ["id"]),
+            tool("med_add", "Cadastra remédio com lembrete. Registre SÓ o que o usuário informou, nome e dose exatamente "
+                 "como ele disse; nunca sugira dose ou horário. times: 'HH:MM,HH:MM'. days: 'todos' ou seg,ter,qua,qui,sex,sab,dom. "
+                 "start/end AAAA-MM-DD opcionais. stock = unidades em casa; per_dose = unidades por dose.",
+                 {"name": s, "dose": s, "times": s, "days": s, "start": s, "end": s, "stock": {"type": "number"},
+                  "per_dose": {"type": "number"}}, ["name", "dose", "times"]),
+            tool("med_list", "Lista remédios cadastrados e as doses de hoje (tomada, pendente, perdida)."),
+            tool("med_taken", "Registra que o usuário tomou o remédio (pelo nome): 'tomei o losartana'.", {"name": s}, ["name"]),
+            tool("med_stock", "Atualiza o estoque (unidades em casa) de um remédio pelo id.",
+                 {"id": i, "stock": {"type": "number"}}, ["id", "stock"]),
+            tool("med_remove", "Remove um remédio (para os lembretes; o histórico fica).", {"id": i}, ["id"]),
             tool("web_fetch", "Lê o texto de uma página pública http(s).", {"url": s}, ["url"]),
             tool("news", "Manchetes recentes sobre um assunto (Google News). country: BR ou US etc.",
                  {"topic": s, "country": s, "max_items": i}, ["topic"]),
@@ -292,7 +333,7 @@ class Tools:
 
     # Argumentos que podem aparecer no registro de ações em ferramentas privadas (o resto vira "…").
     LOGGABLE = {"id", "event_id", "message_id", "file_id", "days", "max_results", "domain", "service", "entity_id", "due",
-                "kind", "slot", "importance", "timezone", "show_done", "in_minutes", "when", "country", "max_items"}
+                "kind", "slot", "importance", "timezone", "show_done", "in_minutes", "when", "country", "max_items", "stock"}
 
     def _loggable(self, name: str, args: dict) -> dict:
         """Ferramentas públicas registram tudo; privadas registram só campos neutros (nunca texto de e-mail, saúde...)."""
@@ -315,6 +356,12 @@ class Tools:
             kind = args.get("kind", "fact")
             if classify(str(args.get("content", ""))) >= SENSITIVE or kind == "profile":  # saúde/finanças/perfil: confirma
                 needs, label = True, f"Guardar na memória ({kind}, dado sensível): {args.get('content', '')}"
+        if name == "med_add":  # cria alarmes de saúde: mostra exatamente o que será agendado
+            needs, label = True, ("Cadastrar remédio: " + ", ".join(f"{k}={args[k]}" for k in
+                                  ("name", "dose", "times", "days", "start", "end", "stock", "per_dose") if args.get(k) not in (None, "")))
+        if name == "med_remove":
+            med = self.meds.get(int(args.get("id", 0) or 0)) if str(args.get("id", "")).lstrip("-").isdigit() else None
+            needs, label = True, f"Remover remédio [{args.get('id')}]: {self.meds.describe(med) if med else '(não encontrado)'}"
         if name == "memory_forget":  # destrutivo: mostra o que será apagado, não só o id
             row = self.memory.mem.get(int(args.get("id", 0) or 0)) if str(args.get("id", "")).lstrip("-").isdigit() else None
             needs, label = True, f"Esquecer [{args.get('id')}]: {row['content'] if row else '(não encontrado)'}"

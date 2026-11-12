@@ -16,7 +16,8 @@ NORMAL, PRIVATE, SENSITIVE, SECRET = 0, 1, 2, 3
 # Ferramentas que só lidam com informação pública. Qualquer outra é privada por padrão (conservador).
 PUBLIC_TOOLS = {"get_time", "news", "fx_rates", "stock_quote", "bcb_indicators", "weather", "world_time",
                 "web_fetch", "web_search"}
-SENSITIVE_TOOLS = {"memory_search", "memory_save", "memory_update", "memory_forget", "memory_list", "daily_brief"}
+SENSITIVE_TOOLS = {"memory_search", "memory_save", "memory_update", "memory_forget", "memory_list", "daily_brief",
+                   "med_add", "med_list", "med_taken", "med_stock", "med_remove"}
 # Ferramentas cujo resultado traz texto de terceiros. Depois de usar qualquer uma, o turno é "não confiável":
 # o que o modelo quiser gravar na memória fica pendente até o usuário aprovar (defesa contra injeção de prompt).
 UNTRUSTED_TOOLS = {"gmail_search", "gmail_read", "calendar_list", "drive_search", "drive_read", "web_fetch", "news",

@@ -71,7 +71,10 @@ class Brain:
             "quando ele pedir para lembrar algo, usando slot para estados que mudam; nunca invente memórias; sobre "
             "saúde ou finanças use só o que está na memória e, se faltar, diga que não sabe; para esquecer, busque o "
             "id com memory_search e use memory_forget. Se o bloco de memória não tiver o que precisa, use memory_search "
-            "com sinônimos e outras palavras antes de dizer que não sabe."
+            "com sinônimos e outras palavras antes de dizer que não sabe. Remédios: use as ferramentas med_*; registre só o que "
+            "o usuário informou, com nome e dose exatamente como ele disse, e NUNCA sugira dose, horário, troca ou "
+            "combinação de remédios (você não é médico: para dúvida clínica, oriente falar com médico ou farmacêutico). "
+            "Quando ele disser que tomou um remédio, use med_taken."
         )
 
     def _volatile(self, max_level: int) -> str:

@@ -232,10 +232,34 @@ class Hud:
                     return self._send(400)
 
             def do_POST(self):
+                self._body_read = False
+                try:
+                    self._post()
+                finally:
+                    self._drain()
+
+            def _drain(self):
+                """Responder sem ler o corpo e fechar gera RST (conexão abortada): no Windows o cliente perde até o 403
+                (WinError 10053/10054). Depois de responder, consome o corpo que sobrou (limite e prazo curtos) e fecha limpo."""
+                if self._body_read:
+                    return
+                try:
+                    n = min(int(self.headers.get("Content-Length", 0)), 10_000)
+                    self.connection.settimeout(2)
+                    while n > 0:
+                        chunk = self.rfile.read(min(n, 4096))
+                        if not chunk:
+                            break
+                        n -= len(chunk)
+                except (ValueError, OSError):
+                    pass
+
+            def _post(self):
                 if not self._auth(self.headers.get("X-Token", "")):
                     return self._send(403)
                 try:
                     n = int(self.headers.get("Content-Length", 0))
+                    self._body_read = True
                     body = json.loads(self.rfile.read(min(n, 10_000)) or b"{}")
                 except ValueError:
                     return self._send(400)

@@ -112,6 +112,9 @@ Leva alguns minutos na primeira vez. Depois: `https://SEU-DOMINIO`, digite o có
 ### 4. Conectar Google, Home Assistant e outros provedores
 Mesmas variáveis do README principal, no arquivo `.env`. Depois de editar: `docker compose up -d`.
 
+### 5. Telegram, remédios e monitor externo
+Coloque `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` e `HEALTHCHECK_URL` no mesmo `.env` (passo a passo em [`telegram-meds.md`](telegram-meds.md)); depois rode o diagnóstico e o teste de aceitação de [`deploy-checklist.md`](deploy-checklist.md). É isto que torna o lembrete de remédio confiável: chega com o app fechado, e o monitor externo avisa se o servidor cair.
+
 ## Segurança: o que já vem e o que é com você
 
 **Já vem:** firewall fechado (22/80/443), app sem porta pública, HTTPS, bloqueio de SSH por tentativas, atualizações

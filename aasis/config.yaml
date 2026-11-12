@@ -99,3 +99,16 @@ memory:                     # memória de longo prazo (docs/memory-design.md)
 backup:                     # modo servidor: uma cópia por dia do banco em <dados>/backups (veja docs/vps.md)
   enabled: true
   keep: 14
+
+telegram:                   # canal confiável (defina TELEGRAM_BOT_TOKEN e TELEGRAM_CHAT_ID no .env; veja docs/telegram-meds.md)
+  enabled: true
+  detail: full              # full = nome e dose no aviso | minimal = só "seu remédio" e o horário (o Telegram vê o conteúdo)
+
+meds:                       # lembretes de remédio (o AASIS não é dispositivo médico)
+  missed_after_min: 180     # passado esse prazo a dose vira "perdida" e avisa
+  resend_s: 300             # reenvio enquanto não confirmar
+  max_attempts: 6
+  low_stock_days: 5         # avisa quando o estoque dura <= 5 dias
+
+heartbeat:                  # monitor externo (HEALTHCHECK_URL no .env, https)
+  interval_s: 300
