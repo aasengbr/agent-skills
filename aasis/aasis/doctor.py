@@ -83,10 +83,12 @@ def run_checks(cfg: dict, env=None, online: bool = False, serve: bool = False, h
     if usable:
         add(OK, "Provedores de IA com chave", ", ".join(usable))
     else:
-        add(FAIL, "Provedores de IA com chave", "nenhuma chave definida (ex.: ANTHROPIC_API_KEY)")
+        add(WARN, "Provedores de IA com chave", "nenhuma chave definida: a conversa com IA fica indisponível; "
+            "os comandos de remédio do Telegram (/remedio, /tomei...) funcionam sem IA")
     if usable and not trusted_ok:
-        add(FAIL, "Provedor para dados sensíveis",
-            "só há provedores externos: pedidos de saúde e finanças não teriam para onde ir (defina ANTHROPIC_API_KEY)")
+        add(WARN, "Provedor para dados sensíveis",
+            "só há provedores externos: a IA não recebe saúde nem finanças (use os comandos /remedio, sem IA, "
+            "ou defina ANTHROPIC_API_KEY)")
     elif usable:
         add(OK, "Provedor para dados sensíveis", "há provedor confiável/local")
     add(WARN, "Teste real do modelo", "abra o HUD > Modelos > testar (este diagnóstico não gasta tokens)")

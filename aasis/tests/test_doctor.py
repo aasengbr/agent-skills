@@ -53,7 +53,7 @@ def test_good_setup_has_no_failures_offline():
 def test_missing_requirements_fail_in_cloud_mode():
     with tempfile.TemporaryDirectory() as tmp:
         lv = levels(check({}, tmp))
-        assert lv["Provedores de IA com chave"] == FAIL and lv["Código de acesso (AASIS_HUD_CODE)"] == FAIL
+        assert lv["Provedores de IA com chave"] == WARN and lv["Código de acesso (AASIS_HUD_CODE)"] == FAIL
         assert lv["Domínio permitido"] == FAIL and lv["Telegram"] == WARN
         assert levels(check({**GOOD, "AASIS_HUD_CODE": "curto"}, tmp))["Código de acesso (AASIS_HUD_CODE)"] == FAIL
         assert levels(check({**GOOD, "AASIS_HUD_CODE": "curto"}, tmp, serve=False)).get("Código de acesso (AASIS_HUD_CODE)") is None
@@ -62,7 +62,7 @@ def test_missing_requirements_fail_in_cloud_mode():
 def test_only_external_provider_cannot_serve_sensitive_data():
     with tempfile.TemporaryDirectory() as tmp:
         res = check({**GOOD, "ANTHROPIC_API_KEY": "", "DEEPSEEK_API_KEY": "k"}, tmp)
-        assert levels(res)["Provedor para dados sensíveis"] == FAIL
+        assert levels(res)["Provedor para dados sensíveis"] == WARN          # aviso: os comandos sem IA cobrem remédio
         assert levels(check(GOOD, tmp))["Provedor para dados sensíveis"] == OK
 
 
@@ -226,9 +226,19 @@ def test_example_placeholder_is_not_a_real_key():
     """O .env copiado do env.example traz 'sk-ant-...': não pode contar como chave (achado no notebook do usuário)."""
     with tempfile.TemporaryDirectory() as tmp:
         res = check({**GOOD, "ANTHROPIC_API_KEY": "sk-ant-..."}, tmp)
-        assert levels(res)["Provedores de IA com chave"] == FAIL
+        assert levels(res)["Provedores de IA com chave"] == WARN
         res = check({**GOOD, "ANTHROPIC_API_KEY": "sk-ant-...", "OPENROUTER_API_KEY": "sk-or-real-123"}, tmp)
         lv = levels(res)
-        assert lv["Provedores de IA com chave"] == OK and lv["Provedor para dados sensíveis"] == FAIL   # só externo: sem saúde/finanças
+        assert lv["Provedores de IA com chave"] == OK and lv["Provedor para dados sensíveis"] == WARN   # só externo: sem saúde/finanças
         assert "anthropic" not in dict((n, d) for _, n, d in res)["Provedores de IA com chave"]
         assert levels(check(GOOD, tmp))["Provedor para dados sensíveis"] == OK
+
+
+def test_no_ai_key_is_a_warning_not_a_failure_because_med_commands_need_no_ai():
+    """Sem nenhuma chave de IA o AASIS ainda serve para remédios (comandos do Telegram): o diagnóstico não pode reprovar."""
+    with tempfile.TemporaryDirectory() as tmp:
+        env = {k: v for k, v in GOOD.items() if k != "ANTHROPIC_API_KEY"}
+        res = check(env, tmp, serve=False)
+        assert not [r for r in res if r[0] == FAIL], res
+        detail = dict((n, d) for _, n, d in res)["Provedores de IA com chave"]
+        assert "/remedio" in detail and "sem IA" in detail
